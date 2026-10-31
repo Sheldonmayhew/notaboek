@@ -1,0 +1,9 @@
+/* The desktop window keeps room for its title bar buttons, which a browser doesn't have. */
+
+.sidebar {
+  max-width: min(460px, 85vw);
+}
+
+.topbar {
+  padding-right: 16px;
+}

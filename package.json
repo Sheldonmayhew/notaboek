@@ -1,0 +1,94 @@
+{
+  "name": "folio",
+  "productName": "Folio",
+  "version": "0.2.0",
+  "description": "A calm, block-style editor for plain .md and .txt files.",
+  "main": "out/main/index.js",
+  "private": true,
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "start": "electron-vite preview",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "dist": "electron-vite build && electron-builder --win nsis",
+    "dist:dir": "electron-vite build && electron-builder --win --dir",
+    "test:e2e": "electron-vite build && node test/e2e.mjs",
+    "test:hostile": "electron-vite build && node test/hostile.mjs",
+    "web:build": "node scripts/build-web.mjs",
+    "web:local": "node scripts/build-web.mjs && node dist-server/local.mjs",
+    "db:migrate": "node dist-server/migrate.mjs",
+    "test:sync": "electron-vite build && node scripts/build-web.mjs && node test/sync-e2e.mjs",
+    "test:perf": "electron-vite build && node test/perf.mjs"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.13",
+    "@floating-ui/dom": "^1.8.0",
+    "@hono/node-server": "^2.1.5",
+    "@tiptap/core": "^3.32.2",
+    "@tiptap/extension-bubble-menu": "^3.32.2",
+    "@tiptap/extension-code": "^3.32.2",
+    "@tiptap/extension-code-block-lowlight": "^3.32.2",
+    "@tiptap/extension-image": "^3.32.2",
+    "@tiptap/extension-table": "^3.32.2",
+    "@tiptap/extension-task-item": "^3.32.2",
+    "@tiptap/extension-task-list": "^3.32.2",
+    "@tiptap/extensions": "^3.32.2",
+    "@tiptap/pm": "^3.32.2",
+    "@tiptap/react": "^3.32.2",
+    "@tiptap/starter-kit": "^3.32.2",
+    "@tiptap/suggestion": "^3.32.2",
+    "@types/node": "^26.6.6",
+    "@types/pg": "^8.23.1",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "better-auth": "^1.7.14",
+    "commonmark-spec": "^0.31.2",
+    "electron": "^45.1.0",
+    "electron-builder": "^26.18.0",
+    "electron-vite": "^6.0.0",
+    "esbuild": "^0.28.2",
+    "hono": "^4.13.14",
+    "lowlight": "^3.3.0",
+    "lucide-react": "^1.65.0",
+    "markdown-it": "^15.0.3",
+    "pg": "^8.23.1",
+    "playwright-core": "^1.64.1",
+    "prosemirror-markdown": "^1.13.9",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5"
+  },
+  "build": {
+    "appId": "app.folio.editor",
+    "productName": "Folio",
+    "directories": {
+      "buildResources": "build",
+      "output": "dist"
+    },
+    "files": [
+      "out/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "samples",
+        "to": "samples"
+      }
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "include": "build/installer.nsh"
+    }
+  },
+  "author": "Folio"
+}
