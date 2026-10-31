@@ -15,7 +15,7 @@ npm run dev
 npm run dist
 ```
 
-The installer lands in `dist/`. It asks where new pages should go, with **Browse** opening a File Explorer folder picker. Installing lists Notaboek under "Open with" for `.md`, `.markdown` and `.txt` files without changing your default apps. To open them in Notaboek on a double-click, use **Open with > Choose another app > Always**. Windows may show its own app picker the first time you open a `.txt` file with anything other than its default app. The build isn't code-signed, so Windows SmartScreen will warn you the first time you run it.
+The installer lands in `dist/`. It asks where new pages should go, with **Browse** opening a File Explorer folder picker. Installing lists Notaboek under "Open with" for `.md`, `.markdown` and `.txt` files without changing your default apps. To open them in Notaboek on a double-click, use **Open with > Choose another app > Always**, or choose Notaboek in **Settings > Apps > Default apps**. Windows may show its own app picker the first time you open a `.txt` file with anything other than its default app. The build isn't code-signed, so Windows SmartScreen will warn you the first time you run it.
 
 ## What it does
 
@@ -89,7 +89,7 @@ Limits: only text pages sync, not images beside them; pages over 4 MB stay on th
 
 ## Coming from Folio
 
-Notaboek used to be called Folio. The first time the installed app runs, it copies Folio's settings, sign-in and sample pages to its own profile, and a `Documents\Folio` folder stays your default folder. Folio itself isn't removed, so uninstall it when you're ready. Doing so leaves your pages where they are.
+Notaboek used to be called Folio. The first time the installed app runs, it copies Folio's settings, sign-in and sample pages to its own profile, and a `Documents\Folio` folder stays your default folder. Folio itself isn't removed, so uninstall it when you're ready. Doing so leaves your pages where they are. Windows won't move your defaults across, so a file type that opened in Folio needs Notaboek choosing for it.
 
 ## How your files stay safe
 
