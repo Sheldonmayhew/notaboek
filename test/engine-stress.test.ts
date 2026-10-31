@@ -1,5 +1,5 @@
 // Stress test for the file engine: every CommonMark spec example plus seeded
-// random documents, in both file flavours. Set FOLIO_REPORT to a path to dump
+// random documents, in both file flavours. Set NOTABOEK_REPORT to a path to dump
 // every violation as JSON.
 import { writeFileSync } from 'node:fs'
 import type { Node as PMNode } from '@tiptap/pm/model'
@@ -13,7 +13,7 @@ import {
 } from '../src/renderer/src/doc/document'
 import { schema } from '../src/renderer/src/doc/schema'
 
-const FUZZ_RUNS = Number(process.env.FOLIO_FUZZ ?? 3000)
+const FUZZ_RUNS = Number(process.env.NOTABOEK_FUZZ ?? 3000)
 
 interface Violation {
   invariant: string
@@ -170,8 +170,8 @@ function summarize(name: string, violations: Violation[]): Record<string, number
     const key = `${flavor}:${invariant}`
     counts[key] = (counts[key] ?? 0) + 1
   }
-  if (process.env.FOLIO_REPORT) {
-    writeFileSync(`${process.env.FOLIO_REPORT}.${name}.json`, JSON.stringify(violations, null, 1))
+  if (process.env.NOTABOEK_REPORT) {
+    writeFileSync(`${process.env.NOTABOEK_REPORT}.${name}.json`, JSON.stringify(violations, null, 1))
   }
   console.log(name, JSON.stringify(counts))
   return counts

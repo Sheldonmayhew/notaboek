@@ -1,6 +1,6 @@
 {
-  "name": "folio",
-  "productName": "Folio",
+  "name": "notaboek",
+  "productName": "Notaboek",
   "version": "0.2.0",
   "description": "A calm, block-style editor for plain .md and .txt files.",
   "main": "out/main/index.js",
@@ -63,8 +63,8 @@
     "vitest": "^5.0.5"
   },
   "build": {
-    "appId": "app.folio.editor",
-    "productName": "Folio",
+    "appId": "app.notaboek.editor",
+    "productName": "Notaboek",
     "directories": {
       "buildResources": "build",
       "output": "dist"
@@ -90,5 +90,5 @@
       "include": "build/installer.nsh"
     }
   },
-  "author": "Folio"
+  "author": "Notaboek"
 }

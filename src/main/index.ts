@@ -3,23 +3,28 @@ import { existsSync, watch, type FSWatcher } from 'node:fs'
 import { cp, mkdir, readFile as readRaw, writeFile as writeRaw } from 'node:fs/promises'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
-import type { Opened, Session, TableAction, TextEncodingName, TrashResult } from '../shared/api'
+import type { Opened, SearchOptions, Session, TableAction, TextEncodingName, TrashResult } from '../shared/api'
 import {
+  IMAGE_FILE,
   TEXT_FILE,
+  adoptProfile,
   createUniqueFile,
+  importImage,
   isIgnoredName,
   listDir,
   moveEntries,
   readDefaultFolder,
   readFile,
   renameFile,
+  saveImage,
+  searchFolder,
   writeDefaultFolder,
   writeFile,
   writeOnClose
 } from './files'
 import { DesktopSync } from './sync'
 
-const IMAGE_FILE = /\.(png|jpe?g|gif|webp|svg|bmp|avif)$/i
+const OLD_NAME = 'Folio'
 const OVERLAY_HEIGHT = 45
 const ZOOM_STEP = 0.5
 const MAX_ZOOM = 3
@@ -32,32 +37,44 @@ const OVERLAY = {
 interface Settings {
   workspace: string | null
   file: string | null
+  tabs: string[]
   recent: string[]
 }
 
+const onlyStrings = (value: unknown): string[] =>
+  Array.isArray(value) ? value.filter((item: unknown): item is string => typeof item === 'string') : []
+
 let window: BrowserWindow | null = null
 let watcher: FSWatcher | null = null
-let settings: Settings = { workspace: null, file: null, recent: [] }
+let settings: Settings = { workspace: null, file: null, tabs: [], recent: [] }
 let pendingFile: string | null = null
 let defaultFolder = ''
 let tableContext = false
+let latestSearch = 0
 const cloudSync = new DesktopSync((status) => window?.webContents.send('sync:status', status))
 
 protocol.registerSchemesAsPrivileged([
-  { scheme: 'folio-asset', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } }
+  { scheme: 'notaboek-asset', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } }
 ])
 
 const settingsPath = () => path.join(app.getPath('userData'), 'settings.json')
 const defaultFolderPath = () => path.join(app.getPath('userData'), 'default-folder.txt')
 const samplesFolder = () => path.join(app.getPath('userData'), 'Sample pages')
 
-function standardDefaultFolder(): string {
+function documentsFolder(): string {
   try {
-    return path.join(app.getPath('documents'), 'Folio')
+    return app.getPath('documents')
   } catch {
     // Windows refuses this when Documents was redirected somewhere that's gone.
-    return path.join(app.getPath('home'), 'Folio')
+    return app.getPath('home')
   }
+}
+
+// Pages already in the folder from before the app was renamed stay the default.
+function standardDefaultFolder(): string {
+  const documents = documentsFolder()
+  const before = path.join(documents, OLD_NAME)
+  return existsSync(before) ? before : path.join(documents, 'Notaboek')
 }
 
 async function loadSettings(): Promise<void> {
@@ -66,9 +83,8 @@ async function loadSettings(): Promise<void> {
     settings = {
       workspace: typeof saved.workspace === 'string' ? saved.workspace : null,
       file: typeof saved.file === 'string' ? saved.file : null,
-      recent: Array.isArray(saved.recent)
-        ? saved.recent.filter((item: unknown) => typeof item === 'string')
-        : []
+      tabs: onlyStrings(saved.tabs),
+      recent: onlyStrings(saved.recent)
     }
   } catch {
     // First run, or an unreadable file. Defaults are fine either way.
@@ -85,7 +101,7 @@ async function ensureDefaultFolder(): Promise<void> {
   try {
     await mkdir(defaultFolder, { recursive: true })
   } catch {
-    throw new Error(`Folio can't use ${defaultFolder}. Choose another default folder.`)
+    throw new Error(`Notaboek can't use ${defaultFolder}. Choose another default folder.`)
   }
 }
 
@@ -132,6 +148,7 @@ function watchWorkspace(): void {
 }
 
 function setWorkspace(folder: string, file: string | null): Opened {
+  if (folder !== settings.workspace) settings.tabs = []
   settings.workspace = folder
   settings.file = file
   settings.recent = [folder, ...settings.recent.filter((item) => item !== folder)].slice(0, 6)
@@ -183,9 +200,11 @@ function registerIpc(): void {
     const workspace = settings.workspace && existsSync(settings.workspace) ? settings.workspace : null
     if (workspace) watchWorkspace()
     const file = workspace && settings.file && existsSync(settings.file) ? settings.file : null
+    const tabs = workspace ? settings.tabs.filter((tab) => isInside(workspace, tab) && existsSync(tab)) : []
     return {
       workspace,
       file,
+      tabs,
       recent: settings.recent.filter((item) => existsSync(item)),
       defaultFolder,
       samplesFolder: samplesFolder()
@@ -215,13 +234,14 @@ function registerIpc(): void {
 
   ipcMain.handle('open:samples', async () => {
     const target = samplesFolder()
-    if (!existsSync(target)) {
+    const welcome = path.join(target, 'Welcome to Notaboek.md')
+    if (!existsSync(welcome)) {
       const source = app.isPackaged
         ? path.join(process.resourcesPath, 'samples')
         : path.join(app.getAppPath(), 'samples')
-      await cp(source, target, { recursive: true })
+      await cp(source, target, { recursive: true, force: false })
     }
-    return setWorkspace(target, path.join(target, 'Welcome to Folio.md'))
+    return setWorkspace(target, welcome)
   })
 
   ipcMain.handle('default:open', async () => {
@@ -254,12 +274,19 @@ function registerIpc(): void {
     return file ? openPath(file) : null
   })
 
-  ipcMain.handle('session:file', (_event, file: string | null) => {
+  ipcMain.handle('session:tabs', (_event, tabs: string[], file: string | null) => {
+    settings.tabs = tabs
     settings.file = file
     saveSettings()
   })
 
   ipcMain.handle('fs:list', (_event, dir: string) => listDir(guard(dir)))
+  ipcMain.handle('fs:search', (_event, query: string, options: SearchOptions) => {
+    const search = ++latestSearch
+    const folder = settings.workspace
+    if (!folder || !query) return { hits: [], truncated: false }
+    return searchFolder(folder, query, options, () => search === latestSearch)
+  })
   ipcMain.handle('fs:read', (_event, file: string) => readFile(guard(file)))
   ipcMain.handle(
     'fs:write',
@@ -317,6 +344,22 @@ function registerIpc(): void {
     }
     return result
   })
+  ipcMain.handle('images:pick', async (_event, dir: string) => {
+    const folder = guard(dir)
+    const result = await dialog.showOpenDialog(window!, {
+      title: 'Insert an image',
+      defaultPath: folder,
+      properties: ['openFile', 'multiSelections'],
+      filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'avif'] }]
+    })
+    if (result.canceled) return []
+    const links: string[] = []
+    for (const file of result.filePaths) links.push(await importImage(file, folder, settings.workspace!))
+    return links
+  })
+  ipcMain.handle('images:save', (_event, dir: string, name: string, bytes: Uint8Array) =>
+    saveImage(guard(dir), name, bytes)
+  )
   ipcMain.on('shell:reveal', (_event, file: string) => shell.showItemInFolder(guard(file)))
   ipcMain.on('shell:external', (_event, url: string) => {
     if (/^(https?:|mailto:)/i.test(url)) void shell.openExternal(url)
@@ -348,7 +391,7 @@ function createWindow(): void {
     height: 840,
     minWidth: 640,
     minHeight: 420,
-    title: 'Folio',
+    title: 'Notaboek',
     backgroundColor: OVERLAY[theme].color,
     titleBarStyle: 'hidden',
     titleBarOverlay: OVERLAY[theme],
@@ -383,7 +426,7 @@ function createWindow(): void {
       defaultId: 0,
       cancelId: 0,
       message: 'Your latest edits are not saved.',
-      detail: 'Folio could not write them to the file. If you close now, they will be lost.'
+      detail: 'Notaboek could not write them to the file. If you close now, they will be lost.'
     })
     if (choice === 1) event.preventDefault()
   })
@@ -431,6 +474,16 @@ function createWindow(): void {
   else void window.loadFile(path.join(__dirname, '../renderer/index.html'))
 }
 
+// Only for an installed copy: tests and development have profiles of their own,
+// and must never touch a real one.
+if (app.isPackaged) {
+  try {
+    adoptProfile(path.join(app.getPath('appData'), OLD_NAME), app.getPath('userData'))
+  } catch {
+    // Settings can be chosen again, and a failure here shouldn't stop the app opening.
+  }
+}
+
 if (!app.requestSingleInstanceLock()) {
   app.quit()
 } else {
@@ -447,7 +500,7 @@ if (!app.requestSingleInstanceLock()) {
     await loadSettings()
     Menu.setApplicationMenu(null)
 
-    protocol.handle('folio-asset', (request) => {
+    protocol.handle('notaboek-asset', (request) => {
       const file = decodeURIComponent(new URL(request.url).pathname.slice(1))
       if (!IMAGE_FILE.test(file) || isNetworkPath(file)) return new Response(null, { status: 403 })
       return net.fetch(pathToFileURL(file).toString())

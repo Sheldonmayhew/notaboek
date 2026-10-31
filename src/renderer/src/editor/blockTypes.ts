@@ -6,6 +6,7 @@ import {
   Heading1,
   Heading2,
   Heading3,
+  Image,
   Lightbulb,
   List,
   ListOrdered,
@@ -142,6 +143,14 @@ export const BLOCK_TYPES: BlockType[] = [
     keywords: 'grid rows columns',
     icon: Table,
     apply: (chain) => chain.insertTable({ rows: 3, cols: 3, withHeaderRow: true }),
+    convertible: false
+  },
+  {
+    id: 'image',
+    title: 'Image',
+    keywords: 'picture photo screenshot',
+    icon: Image,
+    apply: (chain) => chain.pickImage(),
     convertible: false
   }
 ]

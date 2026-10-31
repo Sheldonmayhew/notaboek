@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { _electron as electron } from 'playwright-core'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const sandbox = await mkdtemp(path.join(tmpdir(), 'folio-perf-'))
+const sandbox = await mkdtemp(path.join(tmpdir(), 'notaboek-perf-'))
 const workspace = path.join(sandbox, 'Notes')
 const userData = path.join(sandbox, 'ud')
 await mkdir(workspace, { recursive: true })
@@ -67,7 +67,7 @@ for (const [name] of cases) {
   const started = Date.now()
   await row.click()
   await page.locator('.tree-row[data-active="true"]', { hasText: name.replace(/\.(md|txt)$/, '') }).waitFor({ timeout: 110000 })
-  await page.locator('.page-content').waitFor({ timeout: 110000 })
+  await page.locator('.tab-view:not([hidden]) .page-content').waitFor({ timeout: 110000 })
   const alive = await responsive(100000)
   const openSeconds = (Date.now() - started) / 1000
   if (!alive) {
@@ -75,7 +75,7 @@ for (const [name] of cases) {
     break
   }
 
-  await page.locator('.page-content').evaluate((element) => {
+  await page.locator('.tab-view:not([hidden]) .page-content').evaluate((element) => {
     const view = element.editor.view
     view.focus()
     view.dispatch(view.state.tr.setSelection(view.state.selection.constructor.atStart(view.state.doc)))

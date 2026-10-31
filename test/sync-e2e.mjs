@@ -9,13 +9,13 @@ import { fileURLToPath } from 'node:url'
 import { _electron as electron, chromium } from 'playwright-core'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const shots = process.env.FOLIO_SHOTS ?? path.join(root, 'test-results')
+const shots = process.env.NOTABOEK_SHOTS ?? path.join(root, 'test-results')
 const port = 8799
 const site = `http://localhost:${port}`
 const email = 'person@example.com'
 const password = 'correct horse battery'
 
-const sandbox = await mkdtemp(path.join(tmpdir(), 'folio-sync-'))
+const sandbox = await mkdtemp(path.join(tmpdir(), 'notaboek-sync-'))
 const folder = path.join(sandbox, 'My pages')
 const profile = path.join(sandbox, 'profile')
 await mkdir(folder, { recursive: true })
@@ -67,7 +67,7 @@ for (const [name, target] of [['web', web], ['desktop', desktop]]) {
 }
 
 const results = []
-const only = process.env.FOLIO_ONLY
+const only = process.env.NOTABOEK_ONLY
 async function check(name, run) {
   if (only && !name.toLowerCase().includes(only.toLowerCase())) return
   try {
@@ -91,10 +91,10 @@ const until = async (test, what, tries = 60) => {
   assert.fail(`Timed out waiting for ${what}`)
 }
 const syncBoth = async () => {
-  await web.evaluate(() => window.folio.syncNow())
-  await desktop.evaluate(() => window.folio.syncNow())
-  await web.evaluate(() => window.folio.syncNow())
-  await desktop.evaluate(() => window.folio.syncNow())
+  await web.evaluate(() => window.notaboek.syncNow())
+  await desktop.evaluate(() => window.notaboek.syncNow())
+  await web.evaluate(() => window.notaboek.syncNow())
+  await desktop.evaluate(() => window.notaboek.syncNow())
 }
 const row = (target, name) => target.locator('.tree-row', { hasText: name }).first()
 const pageText = (target) => target.locator('.page-content').innerText()
@@ -135,7 +135,7 @@ try {
     assert.equal(await web.locator('.workspace-chevron').count(), 0)
     await row(web, 'Written before signing in').click({ button: 'right' })
     const items = await web.locator('.popover .menu-item').allInnerTexts()
-    assert.deepEqual(items, ['Rename', 'Delete'])
+    assert.deepEqual(items, ['Open in new tab', 'Rename', 'Delete'])
     await web.keyboard.press('Escape')
     await web.locator('[aria-label="Page options"]').click()
     assert.equal(await web.locator('.popover .menu-item', { hasText: 'File Explorer' }).count(), 0)
@@ -198,11 +198,11 @@ try {
     await row(web, 'Shared').click()
     await until(async () => (await pageText(web)).includes('start'), 'the shared page')
     await writeFile(onDisk('Shared.md'), 'desktop version\n')
-    await desktop.evaluate(() => window.folio.syncNow())
+    await desktop.evaluate(() => window.notaboek.syncNow())
     await web.evaluate(async () => {
-      const { text } = await window.folio.readFile('/Folio/Shared.md')
-      const { mtime } = await window.folio.readFile('/Folio/Shared.md')
-      await window.folio.writeFile('/Folio/Shared.md', `${text}web version\n`, 'utf8', mtime)
+      const { text } = await window.notaboek.readFile('/Notaboek/Shared.md')
+      const { mtime } = await window.notaboek.readFile('/Notaboek/Shared.md')
+      await window.notaboek.writeFile('/Notaboek/Shared.md', `${text}web version\n`, 'utf8', mtime)
     })
     await syncBoth()
     await syncBoth()
@@ -242,11 +242,11 @@ try {
     await writeFile(onDisk('Rename me.md'), 'text\n')
     await syncBoth()
     await row(web, 'Rename me').waitFor()
-    await web.evaluate(() => window.folio.rename('/Folio/Rename me.md', 'Renamed.md'))
+    await web.evaluate(() => window.notaboek.rename('/Notaboek/Rename me.md', 'Renamed.md'))
     await syncBoth()
     await until(() => exists(onDisk('Renamed.md')), 'the rename on disk')
     assert.equal(await exists(onDisk('Rename me.md')), false)
-    await web.evaluate(() => window.folio.move(['/Folio/Renamed.md'], '/Folio/Archive'))
+    await web.evaluate(() => window.notaboek.move(['/Notaboek/Renamed.md'], '/Notaboek/Archive'))
     await syncBoth()
     await until(() => exists(onDisk('Archive/Renamed.md')), 'the move on disk')
   })

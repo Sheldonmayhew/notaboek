@@ -1,5 +1,7 @@
 import { Extension, InputRule, type Editor } from '@tiptap/core'
 import { Placeholder } from '@tiptap/extensions'
+import { Selection, TextSelection } from '@tiptap/pm/state'
+import { FindInPage } from './FindInPage'
 import { schemaExtensions } from './schemaExtensions'
 import { SlashCommand } from './SlashCommand'
 import { MarkdownTableShape } from './tableActions'
@@ -18,11 +20,24 @@ const listItemAt = (editor: Editor) =>
 
 const inTable = (editor: Editor) => editor.isActive('tableCell') || editor.isActive('tableHeader')
 
+// The browser's own versions stop at the last block it has drawn, which on a
+// large page is nowhere near the end.
+function moveTo(editor: Editor, target: Selection, extend: boolean): boolean {
+  const { state, view } = editor
+  const selection = extend ? TextSelection.between(state.selection.$anchor, target.$head) : target
+  view.dispatch(state.tr.setSelection(selection).scrollIntoView())
+  return true
+}
+
 const EditingKeys = Extension.create({
   name: 'editingKeys',
 
   addKeyboardShortcuts() {
     return {
+      'Mod-Home': ({ editor }) => moveTo(editor, Selection.atStart(editor.state.doc), false),
+      'Mod-End': ({ editor }) => moveTo(editor, Selection.atEnd(editor.state.doc), false),
+      'Shift-Mod-Home': ({ editor }) => moveTo(editor, Selection.atStart(editor.state.doc), true),
+      'Shift-Mod-End': ({ editor }) => moveTo(editor, Selection.atEnd(editor.state.doc), true),
       // Tab should never move focus out of the page, even with nothing to indent.
       // Code blocks and tables have their own handling further down the chain.
       Tab: ({ editor }) => {
@@ -121,6 +136,7 @@ export const editorExtensions = [
   EditingKeys,
   MarkdownTableShape,
   QuickTodo,
+  FindInPage,
   // Last, so the slash menu sees Tab and Enter before EditingKeys does.
   SlashCommand
 ]

@@ -1,4 +1,5 @@
 import {
+  CaseSensitive,
   ChevronRight,
   ChevronsLeft,
   ChevronsUpDown,
@@ -12,7 +13,9 @@ import {
   MoreHorizontal,
   Pencil,
   Plus,
+  Search,
   SquarePen,
+  SquarePlus,
   Trash2,
   X
 } from 'lucide-react'
@@ -27,8 +30,10 @@ import {
 } from 'react'
 import type { SyncStatus, TreeEntry } from '../../../shared/api'
 import { api, baseName, dirName, isInside, samePath, stripExtension } from '../platform'
+import type { Reveal } from '../tabs'
 import { AccountRow } from './AccountRow'
 import { Popover } from './Popover'
+import { SearchResults } from './SearchResults'
 
 interface SidebarProps {
   workspace: string
@@ -38,9 +43,13 @@ interface SidebarProps {
   expanded: Set<string>
   width: number
   floating: boolean
+  // Above zero when something has asked for the search box.
+  searchRequest: number
+  onSearchFocused: () => void
   onWidth: (width: number) => void
   onToggleFolder: (path: string) => void
-  onOpen: (path: string) => void
+  onOpen: (path: string, newTab: boolean) => void
+  onOpenResult: (path: string, reveal: Reveal | null, newTab: boolean) => void
   onNewPage: (dir: string) => void
   onRename: (path: string, name: string) => void
   // Both resolve to whether anything happened, so a cancelled action keeps the selection.
@@ -104,6 +113,7 @@ interface TreeProps extends Pick<SidebarProps, 'activePath' | 'version' | 'expan
   onRenamed: () => void
   onMenu: (menu: RowMenu) => void
   onRowClick: (entry: TreeEntry, event: MouseEvent) => void
+  onRowMiddleClick: (entry: TreeEntry) => void
   onRowKey: (entry: TreeEntry, event: KeyboardEvent<HTMLElement>) => void
   onRowDrag: (entry: TreeEntry, event: DragEvent) => void
   onRowDragOver: (entry: TreeEntry, event: DragEvent) => void
@@ -168,6 +178,13 @@ function Tree(props: TreeProps) {
               draggable={renaming !== entry.path}
               style={{ paddingLeft: 6 + depth * 14 }}
               onClick={(event) => props.onRowClick(entry, event)}
+              onMouseDown={(event) => {
+                // Stops the middle button starting a scroll.
+                if (event.button === 1) event.preventDefault()
+              }}
+              onAuxClick={(event) => {
+                if (event.button === 1) props.onRowMiddleClick(entry)
+              }}
               onKeyDown={(event) => props.onRowKey(entry, event)}
               onContextMenu={openMenu}
               onDragStart={(event) => props.onRowDrag(entry, event)}
@@ -225,18 +242,23 @@ export function Sidebar(props: SidebarProps) {
   const { defaultFolder, onOpenDefaultFolder, onChangeDefaultFolder, onShowDefaultFolder } = props
   const { workspace, activePath, width, floating, onWidth, onCollapse, onNewPage } = props
   const { onOpen, onToggleFolder, onOpenFolder, onOpenFile, onTrash, onMove, syncStatus, onSignIn } = props
+  const { searchRequest, onSearchFocused } = props
   const { localFiles, sync } = api.capabilities
   const [menu, setMenu] = useState<RowMenu | null>(null)
   const [renaming, setRenaming] = useState<string | null>(null)
   const [workspaceMenu, setWorkspaceMenu] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(() => new Set())
   const [dropTarget, setDropTarget] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
+  const [matchCase, setMatchCase] = useState(false)
   const switcher = useRef<HTMLButtonElement>(null)
   const tree = useRef<HTMLDivElement>(null)
+  const searchBox = useRef<HTMLInputElement>(null)
   // The row a Shift range starts from, and that a first Ctrl+click adds to.
   const anchor = useRef<string | null>(null)
   const dragging = useRef<string[] | null>(null)
   const name = baseName(workspace)
+  const searching = search.trim()
 
   const treeRows = () => [...(tree.current?.querySelectorAll<HTMLElement>('.tree-row') ?? [])]
   const visiblePaths = () => treeRows().map((row) => row.dataset.path ?? '')
@@ -245,11 +267,21 @@ export function Sidebar(props: SidebarProps) {
     anchor.current = null
   }
 
-  useEffect(clearSelection, [workspace])
+  useEffect(() => {
+    clearSelection()
+    setSearch('')
+  }, [workspace])
 
   useEffect(() => {
     if (!samePath(activePath, anchor.current)) anchor.current = null
   }, [activePath])
+
+  useEffect(() => {
+    if (searchRequest === 0) return
+    searchBox.current?.focus()
+    searchBox.current?.select()
+    onSearchFocused()
+  }, [searchRequest, onSearchFocused])
 
   // A folder already carries whatever is selected inside it.
   const outermost = (paths: Set<string>) => {
@@ -271,7 +303,7 @@ export function Sidebar(props: SidebarProps) {
     clearSelection()
     anchor.current = entry.path
     if (entry.kind === 'folder') onToggleFolder(entry.path)
-    else onOpen(entry.path)
+    else onOpen(entry.path, false)
   }
 
   const toggle = (path: string) => {
@@ -336,7 +368,7 @@ export function Sidebar(props: SidebarProps) {
     if (!selected.has(entry.path)) clearSelection()
     dragging.current = paths
     event.dataTransfer.effectAllowed = 'move'
-    event.dataTransfer.setData('application/x-folio-items', String(paths.length))
+    event.dataTransfer.setData('application/x-notaboek-items', String(paths.length))
     if (paths.length < 2) return
     const label = document.createElement('div')
     label.className = 'tree-drag-label'
@@ -432,42 +464,94 @@ export function Sidebar(props: SidebarProps) {
         </button>
       </div>
 
-      <div className="sidebar-section">Pages</div>
-      <div
-        ref={tree}
-        className="sidebar-tree"
-        role="tree"
-        aria-label="Pages"
-        aria-multiselectable="true"
-        data-drop={samePath(dropTarget, workspace)}
-        onClick={(event) => {
-          if (event.target === event.currentTarget) clearSelection()
-        }}
-        onDragOver={(event) => offerDrop(workspace, event)}
-        onDragLeave={(event) => {
-          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropTarget(null)
-        }}
-        onDrop={drop}
-      >
-        <Tree
-          {...props}
-          dir={workspace}
-          depth={0}
-          renaming={renaming}
-          selected={selected}
-          dropTarget={dropTarget}
-          onRenamed={() => setRenaming(null)}
-          onMenu={openRowMenu}
-          onRowClick={clickRow}
-          onRowKey={rowKey}
-          onRowDrag={startDrag}
-          onRowDragOver={(entry, event) =>
-            offerDrop(entry.kind === 'folder' ? entry.path : dirName(entry.path), event)
-          }
-          onRowDrop={drop}
-          onDragDone={endDrag}
+      <div className="sidebar-search" role="search">
+        <Search size={15} aria-hidden="true" />
+        <input
+          ref={searchBox}
+          value={search}
+          placeholder="Search pages"
+          aria-label="Search pages"
+          title="Search pages (Ctrl+Shift+F)"
+          spellCheck={false}
+          onChange={(event) => {
+            setSearch(event.target.value)
+            clearSelection()
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') {
+              setSearch('')
+            } else if (event.key === 'ArrowDown') {
+              event.preventDefault()
+              event.currentTarget.closest('.sidebar')?.querySelector<HTMLElement>('.search-results button')?.focus()
+            }
+          }}
         />
+        <button
+          type="button"
+          className="icon-button small"
+          aria-label="Match case"
+          aria-pressed={matchCase}
+          data-active={matchCase}
+          title="Match case"
+          onClick={() => setMatchCase((exact) => !exact)}
+        >
+          <CaseSensitive size={16} />
+        </button>
       </div>
+
+      {searching ? (
+        <SearchResults
+          workspace={workspace}
+          query={searching}
+          matchCase={matchCase}
+          version={props.version}
+          onOpen={(path, line, newTab) =>
+            props.onOpenResult(path, line === null ? null : { query: searching, matchCase, line }, newTab)
+          }
+        />
+      ) : (
+        <>
+          <div className="sidebar-section">Pages</div>
+          <div
+            ref={tree}
+            className="sidebar-tree"
+            role="tree"
+            aria-label="Pages"
+            aria-multiselectable="true"
+            data-drop={samePath(dropTarget, workspace)}
+            onClick={(event) => {
+              if (event.target === event.currentTarget) clearSelection()
+            }}
+            onDragOver={(event) => offerDrop(workspace, event)}
+            onDragLeave={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropTarget(null)
+            }}
+            onDrop={drop}
+          >
+            <Tree
+              {...props}
+              dir={workspace}
+              depth={0}
+              renaming={renaming}
+              selected={selected}
+              dropTarget={dropTarget}
+              onRenamed={() => setRenaming(null)}
+              onMenu={openRowMenu}
+              onRowClick={clickRow}
+              onRowMiddleClick={(entry) => {
+                if (entry.kind === 'file') onOpen(entry.path, true)
+              }}
+              onRowKey={rowKey}
+              onRowDrag={startDrag}
+              onRowDragOver={(entry, event) =>
+                offerDrop(entry.kind === 'folder' ? entry.path : dirName(entry.path), event)
+              }
+              onRowDrop={drop}
+              onDragDone={endDrag}
+            />
+          </div>
+        </>
+      )}
 
       {selected.size > 1 && (
         <div className="sidebar-selection" role="toolbar" aria-label="Selected items">
@@ -583,6 +667,19 @@ export function Sidebar(props: SidebarProps) {
 
       {menu && (
         <Popover anchor={menu.anchor} onClose={() => setMenu(null)}>
+          {menuCount === 1 && menu.entry.kind === 'file' && (
+            <button
+              type="button"
+              className="menu-item"
+              onClick={() => {
+                onOpen(menu.entry.path, true)
+                setMenu(null)
+              }}
+            >
+              <SquarePlus size={18} strokeWidth={1.75} />
+              <span className="menu-item-title">Open in new tab</span>
+            </button>
+          )}
           {menuCount === 1 && (
             <button
               type="button"

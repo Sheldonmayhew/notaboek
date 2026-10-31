@@ -9,9 +9,9 @@ import { fileURLToPath } from 'node:url'
 import { _electron as electron } from 'playwright-core'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const shots = process.env.FOLIO_SHOTS ?? path.join(root, 'test-results')
-const only = process.env.FOLIO_ONLY
-const sandbox = await mkdtemp(path.join(tmpdir(), 'folio-hostile-'))
+const shots = process.env.NOTABOEK_SHOTS ?? path.join(root, 'test-results')
+const only = process.env.NOTABOEK_ONLY
+const sandbox = await mkdtemp(path.join(tmpdir(), 'notaboek-hostile-'))
 const workspace = path.join(sandbox, 'Notes')
 const userData = path.join(sandbox, 'user-data')
 await mkdir(shots, { recursive: true })
@@ -101,7 +101,7 @@ async function check(name, run) {
 }
 
 const wait = (ms) => page.waitForTimeout(ms)
-let editor = page.locator('.page-content')
+let editor = page.locator('.tab-view:not([hidden]) .page-content')
 const saved = () => page.locator('.save-status[data-status="saved"]').waitFor({ timeout: 4000 })
 const file = (name) => path.join(workspace, name)
 const read = (name) => readFile(file(name), 'utf8')
@@ -485,7 +485,7 @@ try {
 
   await check('handle lines up after scrolling and resizing the sidebar', async () => {
     await open('Long.md', Array.from({ length: 80 }, (_, i) => `Line ${i}`).join('\n\n'))
-    await page.locator('.scroller').evaluate((el) => el.scrollTo(0, 900))
+    await page.locator('.tab-view:not([hidden]) .scroller').evaluate((el) => el.scrollTo(0, 900))
     await wait(50)
     const target = editor.locator('p', { hasText: 'Line 40' })
     const box = await target.boundingBox()
@@ -527,7 +527,7 @@ try {
     assert.equal(await page.locator('.toolbar-link').count(), 0, 'link form closed')
     await page.locator('.toolbar [aria-label^="Link"]').click()
     await page.locator('.toolbar-link input').waitFor()
-    await page.locator('.page-end').click()
+    await page.locator('.tab-view:not([hidden]) .page-end').click()
     await wait(200)
     assert.equal(await page.locator('.toolbar-link').count(), 0, 'stuck open after clicking away')
   })
@@ -590,19 +590,19 @@ try {
 
   await check('title and H1 trade places without losing the name', async () => {
     await open('Trade.md', '# Heading title\n\nBody\n')
-    assert.equal(await page.locator('.page-title').count(), 0)
+    assert.equal(await page.locator('.tab-view:not([hidden]) .page-title').count(), 0)
     await editor.locator('h1').click()
     await page.keyboard.press('Control+a')
     await page.keyboard.press('Delete')
     await wait(100)
-    assert.equal(await page.locator('.page-title').inputValue(), 'Trade')
+    assert.equal(await page.locator('.tab-view:not([hidden]) .page-title').inputValue(), 'Trade')
     await page.keyboard.type('# New one')
     await wait(100)
-    assert.equal(await page.locator('.page-title').count(), 0)
+    assert.equal(await page.locator('.tab-view:not([hidden]) .page-title').count(), 0)
   })
 
   const renameTo = async (name) => {
-    const title = page.locator('.page-title')
+    const title = page.locator('.tab-view:not([hidden]) .page-title')
     await title.click()
     await title.fill(name)
     await page.keyboard.press('Enter')
@@ -613,7 +613,7 @@ try {
     await open('Bad.md', 'x\n')
     await renameTo('a/b:c*d?"e<f>g|h')
     assert.ok(await stat(file('abcdefgh.md')))
-    assert.equal(await page.locator('.page-title').inputValue(), 'abcdefgh')
+    assert.equal(await page.locator('.tab-view:not([hidden]) .page-title').inputValue(), 'abcdefgh')
   })
 
   await check('title rename: collision shows a clear message and keeps the page', async () => {
@@ -622,7 +622,7 @@ try {
     await renameTo('Taken')
     assert.ok((await bannerText()).includes('already exists'), await bannerText())
     assert.equal(await read('Taken.md'), 'taken\n')
-    assert.equal(await page.locator('.page-title').inputValue(), 'Free', 'title should snap back')
+    assert.equal(await page.locator('.tab-view:not([hidden]) .page-title').inputValue(), 'Free', 'title should snap back')
     await page.locator('.banner button', { hasText: 'Dismiss' }).click()
   })
 
@@ -759,7 +759,7 @@ try {
     assert.equal(status, 'error', `status ${status}, banner: ${banner}`)
     assert.ok(banner.length > 0, 'a banner explains it')
     assert.ok(!/EPERM|EACCES/.test(banner), `raw error: ${banner}`)
-    assert.ok(!(await readdir(workspace)).some((n) => n.endsWith('.folio-tmp')), 'temp file left behind')
+    assert.ok(!(await readdir(workspace)).some((n) => n.endsWith('.notaboek-tmp')), 'temp file left behind')
     await page.keyboard.type('!')
     await saved()
     assert.equal(await untilFile('Locked.md', (t) => t.includes('!')), 'locked edit!\n')
@@ -812,7 +812,7 @@ try {
     await editor.locator('p').first().click()
     await page.keyboard.press('End')
     await page.keyboard.type(' typed')
-    const title = page.locator('.page-title')
+    const title = page.locator('.tab-view:not([hidden]) .page-title')
     await title.click()
     await title.fill('Moved')
     await page.keyboard.press('Enter')
@@ -993,17 +993,17 @@ try {
           return 'blocked'
         }
       }
-      const { folio } = window
+      const { notaboek } = window
       const outside = `${workspaceRoot}\\..\\user-data\\settings.json`
       return {
-        readOutside: await attempt(() => folio.readFile('C:\\Windows\\win.ini')),
-        readTraversal: await attempt(() => folio.readFile(outside)),
-        listOutside: await attempt(() => folio.listDir('C:\\')),
-        writeOutside: await attempt(() => folio.writeFile(`${workspaceRoot}\\..\\pwn.md`, 'x', 'utf8', null).then((r) => {
+        readOutside: await attempt(() => notaboek.readFile('C:\\Windows\\win.ini')),
+        readTraversal: await attempt(() => notaboek.readFile(outside)),
+        listOutside: await attempt(() => notaboek.listDir('C:\\')),
+        writeOutside: await attempt(() => notaboek.writeFile(`${workspaceRoot}\\..\\pwn.md`, 'x', 'utf8', null).then((r) => {
           if (!r.ok) throw new Error('no')
         })),
         recentOutside: await attempt(async () => {
-          if ((await folio.openRecent('C:\\Windows')) === null) throw new Error('no')
+          if ((await notaboek.openRecent('C:\\Windows')) === null) throw new Error('no')
         })
       }
     }, workspace)
@@ -1012,9 +1012,9 @@ try {
       Object.fromEntries(Object.keys(attempts).map((key) => [key, 'blocked'])),
       JSON.stringify(attempts)
     )
-    await page.evaluate((workspaceRoot) => window.folio.createFile(workspaceRoot, '..\\pwn2.md'), workspace)
-    const victim = await page.evaluate((workspaceRoot) => window.folio.createFile(workspaceRoot, 'Victim.md'), workspace)
-    await page.evaluate((target) => window.folio.rename(target, '..\\pwn3.md').catch(() => null), victim)
+    await page.evaluate((workspaceRoot) => window.notaboek.createFile(workspaceRoot, '..\\pwn2.md'), workspace)
+    const victim = await page.evaluate((workspaceRoot) => window.notaboek.createFile(workspaceRoot, 'Victim.md'), workspace)
+    await page.evaluate((target) => window.notaboek.rename(target, '..\\pwn3.md').catch(() => null), victim)
     for (const leak of ['pwn.md', 'pwn2.md', 'pwn3.md']) {
       assert.equal(await stat(path.join(sandbox, leak)).catch(() => null), null, leak)
     }
@@ -1024,7 +1024,7 @@ try {
     const report = await page.evaluate(() => ({
       require: typeof window.require,
       process: typeof window.process,
-      api: Object.keys(window.folio).length
+      api: Object.keys(window.notaboek).length
     }))
     assert.equal(report.require, 'undefined')
     assert.equal(report.process, 'undefined')
@@ -1035,6 +1035,41 @@ try {
     assert.deepEqual(prefs, { isolation: true, sandbox: true, node: false })
   })
 
+  await check('saving an image stays in the open folder, and takes only images', async () => {
+    const attempts = await page.evaluate(async (workspaceRoot) => {
+      const bytes = new Uint8Array([137, 80, 78, 71])
+      const attempt = (dir, name) => window.notaboek.saveImage(dir, name, bytes).catch(() => 'blocked')
+      return {
+        outside: await attempt(`${workspaceRoot}\\..`, 'a.png'),
+        system: await attempt('C:\\Windows', 'a.png'),
+        program: await attempt(workspaceRoot, 'run.exe'),
+        page: await attempt(workspaceRoot, 'page.md'),
+        traversal: await attempt(workspaceRoot, '..\\..\\escaped.png'),
+        stream: await attempt(workspaceRoot, 'note.txt:hidden.png')
+      }
+    }, workspace)
+    assert.equal(attempts.outside, 'blocked')
+    assert.equal(attempts.system, 'blocked')
+    assert.equal(attempts.program, 'blocked')
+    assert.equal(attempts.page, 'blocked')
+    assert.equal(attempts.traversal, 'escaped.png')
+    assert.equal(attempts.stream, 'note.txthidden.png')
+    assert.equal(await stat(path.join(sandbox, 'escaped.png')).catch(() => null), null)
+    assert.equal(await stat(path.join(sandbox, 'a.png')).catch(() => null), null)
+    await rm(file('escaped.png'))
+    await rm(file('note.txthidden.png'))
+  })
+
+  await check('searching files stays in the open folder', async () => {
+    await writeFile(path.join(sandbox, 'outside.md'), 'needle-outside\n')
+    const found = await page.evaluate(
+      () => window.notaboek.searchFiles('needle-outside', { matchCase: false }),
+      undefined
+    )
+    assert.deepEqual(found, { hits: [], truncated: false })
+    await rm(path.join(sandbox, 'outside.md'))
+  })
+
   await check('the asset protocol serves images only', async () => {
     await writeFile(file('secret.txt'), 'secret\n')
     const blocked = await page.evaluate(
@@ -1043,7 +1078,7 @@ try {
           const image = new Image()
           image.onload = () => resolve('loaded')
           image.onerror = () => resolve('blocked')
-          image.src = `folio-asset://local/${encodeURIComponent(target)}`
+          image.src = `notaboek-asset://local/${encodeURIComponent(target)}`
         }),
       file('secret.txt').replace(/\\/g, '/')
     )
@@ -1091,7 +1126,7 @@ try {
         await new Promise((resolve) => {
           const image = new Image()
           image.onload = image.onerror = resolve
-          image.src = `folio-asset://local/${encodeURIComponent(target)}`
+          image.src = `notaboek-asset://local/${encodeURIComponent(target)}`
         })
       }
     })
@@ -1112,7 +1147,7 @@ try {
     await saved()
     const text = await untilFile('ImageClip.md', (t) => t.includes('dot'))
     assert.ok(text.includes('![dot](dot.png)'), text)
-    await page.waitForFunction(() => document.querySelector('.page-content img[alt="dot"]')?.naturalWidth > 0)
+    await page.waitForFunction(() => document.querySelector('.tab-view:not([hidden]) .page-content img[alt="dot"]')?.naturalWidth > 0)
   })
 
   await check('audit: dragging a table moves it whole', async () => {
@@ -1205,7 +1240,7 @@ try {
   await check('audit: Tab with code selected indents instead of deleting', async () => {
     await open('CodeTab.md', '```\nline one\nline two\n```\n')
     await editor.locator('pre').click()
-    await page.locator('.page-content').evaluate((element) => {
+    await page.locator('.tab-view:not([hidden]) .page-content').evaluate((element) => {
       const { commands, state } = element.editor
       commands.setTextSelection({ from: 1, to: state.doc.child(0).nodeSize - 1 })
     })
@@ -1297,20 +1332,20 @@ try {
 
   await check('audit: a title of only illegal characters is refused', async () => {
     await open('Keepable.md', 'x\n')
-    const title = page.locator('.page-title')
+    const title = page.locator('.tab-view:not([hidden]) .page-title')
     await title.click()
     await title.fill('???')
     await page.keyboard.press('Enter')
     await wait(350)
     assert.ok(await stat(file('Keepable.md')), 'the file vanished from the sidebar')
-    assert.equal(await page.locator('.page-title').inputValue(), 'Keepable')
+    assert.equal(await page.locator('.tab-view:not([hidden]) .page-title').inputValue(), 'Keepable')
     const dismiss = page.locator('.banner button', { hasText: 'Dismiss' })
     if (await dismiss.count()) await dismiss.click()
   })
 
   await check('audit: the title does not grab focus while typing in the body', async () => {
     await page.keyboard.press('Control+n')
-    await page.locator('.page-title').waitFor()
+    await page.locator('.tab-view:not([hidden]) .page-title').waitFor()
     await wait(150)
     await page.keyboard.press('Enter')
     await page.keyboard.type('# Hello')
@@ -1398,7 +1433,7 @@ try {
     await page.keyboard.type(' unsaved')
     await page.locator('.banner button', { hasText: 'Discard' }).waitFor({ timeout: 3000 })
     await page.locator('.banner button', { hasText: 'Discard' }).click()
-    await page.waitForFunction(() => !document.querySelector('.page-content')?.textContent.includes('unsaved'))
+    await page.waitForFunction(() => !document.querySelector('.tab-view:not([hidden]) .page-content')?.textContent.includes('unsaved'))
     assert.equal(await statusOf(), 'saved')
     await chmod(file('Stuck.md'), 0o666)
   })
@@ -1429,7 +1464,7 @@ try {
     await open('Keep.md')
     const measure = () =>
       page.evaluate(() => {
-        const element = document.querySelector('.page-content')
+        const element = document.querySelector('.tab-view:not([hidden]) .page-content')
         return {
           text: parseFloat(getComputedStyle(element).fontSize),
           width: element.getBoundingClientRect().width,
@@ -1652,7 +1687,7 @@ try {
     await addControls(tableCell('Col1'))
     const overflow = await page.evaluate(() => {
       const wrapper = document.querySelector('.tableWrapper')
-      const scroller = document.querySelector('.scroller')
+      const scroller = document.querySelector('.tab-view:not([hidden]) .scroller')
       return { table: wrapper.scrollWidth - wrapper.clientWidth, page: scroller.scrollWidth - scroller.clientWidth }
     })
     assert.ok(overflow.table > 0, 'the table should scroll')
@@ -1758,7 +1793,7 @@ try {
 
     await recordPrompts(0)
     await page.locator('[aria-label="Move selected items to the Recycle Bin"]').click()
-    await page.locator('.empty-state').waitFor()
+    await page.locator('.tab', { hasText: 'BinA' }).waitFor({ state: 'detached' })
     const prompts = await app.evaluate(() => globalThis.__prompts)
     assert.equal(prompts.length, 1, 'there should be one prompt, not one each')
     assert.match(prompts[0].message, /these 3 items/)
@@ -1887,7 +1922,7 @@ try {
   })
 
   await check('Move to asks where, and a page moved out of the open folder closes safely', async () => {
-    const outside = await mkdtemp(path.join(tmpdir(), 'folio-outside-'))
+    const outside = await mkdtemp(path.join(tmpdir(), 'notaboek-outside-'))
     await mkdir(file('Inbox'), { recursive: true })
     await open('Leaving.md', 'going\n')
     await treeRow('Leaving').click({ button: 'right' })
@@ -1928,12 +1963,12 @@ try {
   })
 
   await check('the window cannot move files into or out of the open folder by itself', async () => {
-    const outside = await mkdtemp(path.join(tmpdir(), 'folio-outside-'))
+    const outside = await mkdtemp(path.join(tmpdir(), 'notaboek-outside-'))
     await writeFile(path.join(outside, 'Theirs.md'), 'theirs\n')
     await writeFile(file('Mine.md'), 'mine\n')
     const refused = (from, to) =>
       page.evaluate(
-        ([source, target]) => window.folio.move([source], target).then(() => false, () => true),
+        ([source, target]) => window.notaboek.move([source], target).then(() => false, () => true),
         [from, to]
       )
     assert.equal(await refused(path.join(outside, 'Theirs.md'), workspace), true)
@@ -1999,7 +2034,7 @@ try {
     })
     await app.close()
     ;({ instance: app, window: page } = await launch())
-    editor = page.locator('.page-content')
+    editor = page.locator('.tab-view:not([hidden]) .page-content')
     watch(page)
     await page.locator('.app').waitFor()
     assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'dark')
@@ -2016,13 +2051,13 @@ try {
       stdio: 'ignore'
     })
     await new Promise((resolve) => second.on('exit', resolve))
-    await page.locator('.page-content p', { hasText: 'handed over' }).waitFor({ timeout: 6000 })
+    await page.locator('.tab-view:not([hidden]) .page-content p', { hasText: 'handed over' }).waitFor({ timeout: 6000 })
     assert.equal(app.windows().length, 1)
   })
 
   await check('closing with a conflict does not silently lose work', async () => {
     await open('LastClash.md', 'base\n')
-    await page.locator('.page-content p').first().click()
+    await page.locator('.tab-view:not([hidden]) .page-content p').first().click()
     await page.keyboard.press('End')
     await page.keyboard.type(' mine')
     await writeFile(file('LastClash.md'), 'theirs\n')
@@ -2061,7 +2096,7 @@ try {
 // Startup states need their own profile.
 async function startup(name, settingsText, run, prepare) {
   if (only && !name.toLowerCase().includes(only.toLowerCase())) return
-  const profile = await mkdtemp(path.join(tmpdir(), 'folio-start-'))
+  const profile = await mkdtemp(path.join(tmpdir(), 'notaboek-start-'))
   await writeFile(path.join(profile, 'settings.json'), settingsText)
   await prepare?.(profile)
   const launchProfile = async () => {
@@ -2109,7 +2144,7 @@ const stubFolderPicker = (instance, chosen) =>
   }, chosen)
 const welcomeButton = (window, name) => window.locator('.welcome-card button', { hasText: name })
 const exists = (target) => stat(target).then(() => true, () => false)
-const defaults = await mkdtemp(path.join(tmpdir(), 'folio-default-'))
+const defaults = await mkdtemp(path.join(tmpdir(), 'notaboek-default-'))
 
 const unicode = path.join(defaults, 'Dépôt ノート')
 await startup(
@@ -2122,11 +2157,50 @@ await startup(
   installed(unicode)
 )
 
-await startup('with nothing chosen, new pages are headed for Documents\\Folio', '{}', async (w, { instance }) => {
+await startup('with nothing chosen, new pages are headed for Documents\\Notaboek', '{}', async (w, { instance }) => {
   await w.locator('.welcome-card').waitFor()
   const documents = await instance().evaluate(({ app }) => app.getPath('documents'))
-  assert.equal(await w.locator('.welcome-default').innerText(), path.join(documents, 'Folio'))
+  // Someone who already keeps pages in the folder from before the rename stays there.
+  const name = (await stat(path.join(documents, 'Folio')).catch(() => null)) ? 'Folio' : 'Notaboek'
+  assert.equal(await w.locator('.welcome-default').innerText(), path.join(documents, name))
 })
+
+const tabbed = path.join(defaults, 'tabbed')
+await startup(
+  'tabs come back after a restart, on the same page',
+  JSON.stringify({
+    workspace: tabbed,
+    file: path.join(tabbed, 'Two.md'),
+    tabs: ['One.md', 'Two.md', 'Deleted.md'].map((name) => path.join(tabbed, name)),
+    recent: []
+  }),
+  async (w, { relaunch }) => {
+    const shown = (window) => window.locator('.tab-view:not([hidden]) .page-content')
+    await shown(w).locator('p', { hasText: 'Second' }).waitFor()
+    assert.deepEqual(await w.locator('.tab-name').allTextContents(), ['One', 'Two'])
+    assert.equal(await w.locator('.page-content').count(), 1, 'tabs are read when first shown')
+    await w.locator('.tab', { hasText: 'One' }).click()
+    await shown(w).locator('p', { hasText: 'First' }).waitFor()
+    await w.waitForTimeout(200)
+    const again = await relaunch()
+    await shown(again).locator('p', { hasText: 'First' }).waitFor()
+    assert.deepEqual(await again.locator('.tab-name').allTextContents(), ['One', 'Two'])
+  },
+  async () => {
+    await mkdir(tabbed, { recursive: true })
+    await writeFile(path.join(tabbed, 'One.md'), 'First\n')
+    await writeFile(path.join(tabbed, 'Two.md'), 'Second\n')
+  }
+)
+
+await startup(
+  'a settings file from before tabs still opens its page',
+  JSON.stringify({ workspace: tabbed, file: path.join(tabbed, 'Two.md'), recent: [] }),
+  async (w) => {
+    await w.locator('.tab-view:not([hidden]) .page-content p', { hasText: 'Second' }).waitFor()
+    assert.deepEqual(await w.locator('.tab-name').allTextContents(), ['Two'])
+  }
+)
 
 const fresh = path.join(defaults, 'not', 'made', 'yet')
 await startup(
@@ -2135,7 +2209,7 @@ await startup(
   async (w, { profile }) => {
     assert.equal(await exists(fresh), false)
     await welcomeButton(w, 'New page').click()
-    await w.locator('.page-title').waitFor()
+    await w.locator('.tab-view:not([hidden]) .page-title').waitFor()
     assert.equal(await w.evaluate(() => document.activeElement?.className.includes('page-title')), true, 'title not focused')
     assert.deepEqual(await readdir(fresh), ['Untitled.md'])
     await w.locator('.tree-row', { hasText: 'Untitled' }).waitFor()
@@ -2157,7 +2231,7 @@ await startup(
     await w.keyboard.down('n')
     await w.keyboard.up('n')
     await w.keyboard.up('Control')
-    await w.locator('.page-title').waitFor()
+    await w.locator('.tab-view:not([hidden]) .page-title').waitFor()
     await w.waitForTimeout(300)
     assert.deepEqual(await readdir(byKeyboard), ['Untitled.md'])
   },
@@ -2180,7 +2254,7 @@ await startup(
     await welcomeButton(w, 'Change').click()
     await error.waitFor({ state: 'detached' })
     await welcomeButton(w, 'New page').click()
-    await w.locator('.page-title').waitFor()
+    await w.locator('.tab-view:not([hidden]) .page-title').waitFor()
     assert.deepEqual(await readdir(replacement), ['Untitled.md'])
   },
   async (profile) => {
@@ -2256,11 +2330,11 @@ await startup(
   '{}',
   async (w, { profile }) => {
     await welcomeButton(w, 'Try the sample pages').click()
-    await w.locator('.page-content').waitFor()
+    await w.locator('.tab-view:not([hidden]) .page-content').waitFor()
     const before = await readdir(path.join(profile, 'Sample pages'))
-    await w.locator('.page-content p').first().click()
+    await w.locator('.tab-view:not([hidden]) .page-content p').first().click()
     await w.keyboard.press('Control+n')
-    await w.locator('.page-title').waitFor()
+    await w.locator('.tab-view:not([hidden]) .page-title').waitFor()
     assert.deepEqual(await readdir(fromSamples), ['Untitled.md'])
     assert.deepEqual(await readdir(path.join(profile, 'Sample pages')), before)
   },
@@ -2277,7 +2351,7 @@ await startup(
   async (w, { instance }) => {
     await w.locator('.tree-row', { hasText: 'Mine' }).waitFor()
     await w.keyboard.press('Control+n')
-    await w.locator('.page-title').waitFor()
+    await w.locator('.tab-view:not([hidden]) .page-title').waitFor()
     assert.deepEqual((await readdir(ownFolder)).sort(), ['Mine.md', 'Untitled.md'])
     assert.equal(await exists(sideDefault), false, 'the default folder should not be touched')
 

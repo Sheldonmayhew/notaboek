@@ -1,4 +1,4 @@
-import { Extension, mergeAttributes } from '@tiptap/core'
+import { Extension, mergeAttributes, type Editor } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
 import Code from '@tiptap/extension-code'
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight'
@@ -12,6 +12,9 @@ import { Callout } from './Callout'
 import { RawBlock, RawInline } from './RawHtml'
 
 const lowlight = createLowlight(common)
+
+const assetDirOf = (editor: Editor): string | null =>
+  (editor.storage as unknown as { pageImages?: { dir: string } }).pageImages?.dir ?? null
 
 const alignAttribute = {
   align: {
@@ -38,6 +41,24 @@ const AlignedHeader = TableHeader.extend({
   }
 })
 
+interface ImageAttrs {
+  src?: string | null
+  alt?: string | null
+  title?: string | null
+}
+
+// Each open page resolves its images against its own folder, which only the
+// page's editor knows, so they're drawn here and not from the shared schema.
+function drawImage(dom: HTMLImageElement, attrs: ImageAttrs, baseDir: string | null): void {
+  const url = resolveAssetUrl(attrs.src, baseDir)
+  if (!url) dom.removeAttribute('src')
+  else if (dom.getAttribute('src') !== url) dom.setAttribute('src', url)
+  dom.setAttribute('data-src', attrs.src ?? '')
+  dom.alt = attrs.alt ?? ''
+  if (attrs.title) dom.title = attrs.title
+  else dom.removeAttribute('title')
+}
+
 const LocalImage = Image.extend({
   addAttributes() {
     const parent = this.parent?.() ?? {}
@@ -49,10 +70,23 @@ const LocalImage = Image.extend({
         ...parent.src,
         parseHTML: (element: HTMLElement) =>
           element.getAttribute('data-src') ?? element.getAttribute('src'),
-        renderHTML: (attrs: { src?: string | null }) => ({
-          src: resolveAssetUrl(attrs.src),
-          'data-src': attrs.src
-        })
+        renderHTML: (attrs: ImageAttrs) => ({ src: attrs.src, 'data-src': attrs.src })
+      }
+    }
+  },
+
+  addNodeView() {
+    return ({ node, editor }) => {
+      const dom = document.createElement('img')
+      const baseDir = () => assetDirOf(editor)
+      drawImage(dom, node.attrs, baseDir())
+      return {
+        dom,
+        update(next) {
+          if (next.type !== node.type) return false
+          drawImage(dom, next.attrs, baseDir())
+          return true
+        }
       }
     }
   }
@@ -82,7 +116,18 @@ const ListStyle = Extension.create({
     const marker = { default: '-', rendered: false }
     return [
       { types: ['bulletList', 'taskList'], attributes: { marker, tight } },
-      { types: ['orderedList'], attributes: { delimiter: { default: '.', rendered: false }, tight } }
+      { types: ['orderedList'], attributes: { delimiter: { default: '.', rendered: false }, tight } },
+      // Which part of a very long paragraph this is. See splitLongParagraphs.
+      {
+        types: ['paragraph'],
+        attributes: {
+          piece: {
+            default: null,
+            parseHTML: () => null,
+            renderHTML: (attrs: { piece?: string | null }) => (attrs.piece ? { 'data-piece': attrs.piece } : {})
+          }
+        }
+      }
     ]
   }
 })

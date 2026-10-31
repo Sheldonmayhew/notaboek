@@ -13,11 +13,15 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
+  adoptProfile,
   createUniqueFile,
+  importImage,
   moveEntries,
   readDefaultFolder,
   readFile,
   renameFile,
+  saveImage,
+  searchFolder,
   writeDefaultFolder,
   writeFile,
   writeOnClose
@@ -28,11 +32,163 @@ const inFolder = (name: string) => path.join(folder, name)
 const mtimeOf = async (file: string) => (await stat(file)).mtimeMs
 
 beforeEach(async () => {
-  folder = await mkdtemp(path.join(tmpdir(), 'folio-files-'))
+  folder = await mkdtemp(path.join(tmpdir(), 'notaboek-files-'))
 })
 
 afterEach(async () => {
   await rm(folder, { recursive: true, force: true, maxRetries: 3 })
+})
+
+describe('searching a folder', () => {
+  const search = (query: string, isCurrent = () => true) =>
+    searchFolder(folder, query, { matchCase: false }, isCurrent)
+  const names = (hits: Array<{ path: string }>) => hits.map((hit) => path.basename(hit.path)).sort()
+
+  it('looks in every text file below the folder', async () => {
+    await mkdir(inFolder('Deep'))
+    await writeBytes(inFolder('One.md'), 'a needle\n')
+    await writeBytes(path.join(folder, 'Deep', 'Two.txt'), 'another needle\n')
+    await writeBytes(inFolder('Three.md'), 'nothing\n')
+    expect(names((await search('needle')).hits)).toEqual(['One.md', 'Two.txt'])
+  })
+
+  it('reads old Notepad encodings', async () => {
+    await writeBytes(inFolder('Wide.txt'), Buffer.from('\uFEFFcafé needle\r\n', 'utf16le'))
+    await writeBytes(inFolder('Legacy.txt'), Buffer.from('caf\xe9 needle\r\n', 'latin1'))
+    const { hits } = await search('café')
+    expect(names(hits)).toEqual(['Legacy.txt', 'Wide.txt'])
+  })
+
+  it("skips what the sidebar doesn't show, and survives what it can't read", async () => {
+    await mkdir(inFolder('node_modules'))
+    await mkdir(inFolder('.git'))
+    await writeBytes(path.join(folder, 'node_modules', 'a.md'), 'needle')
+    await writeBytes(path.join(folder, '.git', 'b.md'), 'needle')
+    await writeBytes(inFolder('photo.png'), 'needle')
+    await writeBytes(inFolder('binary.md'), Buffer.from([0, 1, 2, 0]))
+    await writeBytes(inFolder('huge.md'), Buffer.alloc(9 * 1024 * 1024, 'needle '))
+    await writeBytes(inFolder('real.md'), 'needle')
+    expect(names((await search('needle')).hits)).toEqual(['real.md'])
+  })
+
+  it('stops as soon as a newer search starts', async () => {
+    await writeBytes(inFolder('One.md'), 'needle')
+    await writeBytes(inFolder('Two.md'), 'needle')
+    expect((await search('needle', () => false)).hits).toEqual([])
+  })
+
+  it('says when it stopped at the limit', async () => {
+    await Promise.all(
+      Array.from({ length: 205 }, (_, index) => writeBytes(inFolder(`${index}.md`), 'needle'))
+    )
+    const { hits, truncated } = await search('needle')
+    expect(hits).toHaveLength(200)
+    expect(truncated).toBe(true)
+  }, 30_000)
+})
+
+describe('adding images', () => {
+  const pixel = new Uint8Array([137, 80, 78, 71])
+
+  it('writes beside the page and returns a link to it', async () => {
+    expect(await saveImage(folder, 'photo.png', pixel)).toBe('photo.png')
+    expect(await readBytes(inFolder('photo.png'))).toEqual(Buffer.from(pixel))
+  })
+
+  it('never replaces an image that is already there', async () => {
+    await writeBytes(inFolder('photo.png'), 'mine')
+    expect(await saveImage(folder, 'photo.png', pixel)).toBe('photo 2.png')
+    expect(await readBytes(inFolder('photo.png'), 'utf8')).toBe('mine')
+  })
+
+  it('keeps a name inside the folder and on the disk', async () => {
+    expect(await saveImage(folder, '..\\..\\escaped.png', pixel)).toBe('escaped.png')
+    expect(await saveImage(folder, '../up.png', pixel)).toBe('up.png')
+    expect(await saveImage(folder, 'note.txt:hidden.png', pixel)).toBe('note.txthidden.png')
+    expect(await saveImage(folder, 'con.png', pixel)).toBe('image con.png')
+  })
+
+  it('refuses anything that is not an image, or is far too big', async () => {
+    await expect(saveImage(folder, 'run.exe', pixel)).rejects.toThrow()
+    await expect(saveImage(folder, 'page.md', pixel)).rejects.toThrow()
+    await expect(saveImage(folder, 'big.png', new Uint8Array(26 * 1024 * 1024))).rejects.toThrow('too large')
+    expect(await readdir(folder)).toEqual([])
+  })
+
+  it('keeps a percent sign from reading as an escape', async () => {
+    expect(await saveImage(folder, '100%.png', pixel)).toBe('100%25.png')
+  })
+
+  it('links to an image already in the open folder, without copying it', async () => {
+    await mkdir(inFolder('Notes'))
+    await mkdir(inFolder('Pictures'))
+    await writeBytes(path.join(folder, 'Pictures', 'a.png'), pixel)
+    const link = await importImage(path.join(folder, 'Pictures', 'a.png'), inFolder('Notes'), folder)
+    expect(link).toBe('../Pictures/a.png')
+    expect(await readdir(inFolder('Notes'))).toEqual([])
+  })
+
+  it('copies an image from elsewhere beside the page', async () => {
+    await mkdir(inFolder('Notes'))
+    await writeBytes(inFolder('Holiday.png'), pixel)
+    const link = await importImage(inFolder('Holiday.png'), inFolder('Notes'), inFolder('Notes'))
+    expect(link).toBe('Holiday.png')
+    expect(await readdir(inFolder('Notes'))).toEqual(['Holiday.png'])
+    expect(await readBytes(inFolder('Holiday.png'))).toEqual(Buffer.from(pixel))
+  })
+})
+
+describe('coming from Folio', () => {
+  const before = () => inFolder('Folio')
+  const after = () => inFolder('Notaboek')
+
+  beforeEach(async () => {
+    await mkdir(path.join(before(), 'Sample pages'), { recursive: true })
+    await mkdir(path.join(before(), 'Cache'))
+    await writeBytes(path.join(before(), 'Cache', 'junk'), 'junk')
+    await writeBytes(path.join(before(), 'account.json'), '{"email":"a@b.c"}')
+    await writeBytes(path.join(before(), 'Sample pages', 'Page.md'), 'mine')
+    await writeBytes(
+      path.join(before(), 'settings.json'),
+      JSON.stringify({ workspace: path.join(before(), 'Sample pages'), recent: ['C:\\Other'] })
+    )
+  })
+
+  it('copies what matters and leaves the old profile alone', async () => {
+    adoptProfile(before(), after())
+    expect(await readBytes(path.join(after(), 'account.json'), 'utf8')).toBe('{"email":"a@b.c"}')
+    expect(await readBytes(path.join(after(), 'Sample pages', 'Page.md'), 'utf8')).toBe('mine')
+    expect(await readdir(after())).not.toContain('Cache')
+    expect((await readdir(before())).sort()).toEqual(['Cache', 'Sample pages', 'account.json', 'settings.json'])
+  })
+
+  it('points settings at the copied sample pages', async () => {
+    adoptProfile(before(), after())
+    const settings = JSON.parse(await readBytes(path.join(after(), 'settings.json'), 'utf8'))
+    expect(settings.workspace).toBe(path.join(after(), 'Sample pages'))
+    expect(settings.recent).toEqual(['C:\\Other'])
+  })
+
+  it('keeps the folder chosen in the new installer', async () => {
+    await writeBytes(path.join(before(), 'default-folder.txt'), 'old')
+    await mkdir(after())
+    await writeBytes(path.join(after(), 'default-folder.txt'), 'new')
+    adoptProfile(before(), after())
+    expect(await readBytes(path.join(after(), 'default-folder.txt'), 'utf8')).toBe('new')
+    expect(await readBytes(path.join(after(), 'account.json'), 'utf8')).toBe('{"email":"a@b.c"}')
+  })
+
+  it('only happens once', async () => {
+    adoptProfile(before(), after())
+    await writeBytes(path.join(before(), 'account.json'), 'changed later')
+    await rm(path.join(after(), 'account.json'))
+    adoptProfile(before(), after())
+    expect(await readdir(after())).not.toContain('account.json')
+  })
+
+  it('does nothing with no old profile', () => {
+    expect(() => adoptProfile(inFolder('Nowhere'), after())).not.toThrow()
+  })
 })
 
 describe('the default folder file', () => {

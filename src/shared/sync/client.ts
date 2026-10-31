@@ -8,7 +8,7 @@ export class SignedOut extends Error {
 
 export class QuotaFull extends Error {
   constructor() {
-    super('Your Folio storage is full.')
+    super('Your Notaboek storage is full.')
   }
 }
 
@@ -42,7 +42,7 @@ export function createRemote({ baseUrl, device, headers = () => ({}), fetch: sen
   return {
     async changes(since) {
       const response = await request(`/changes?since=${since}`)
-      if (!response.ok) throw new Error(`Could not reach Folio's servers (${response.status}).`)
+      if (!response.ok) throw new Error(`Could not reach Notaboek's servers (${response.status}).`)
       return (await response.json()) as RemoteChanges
     },
 

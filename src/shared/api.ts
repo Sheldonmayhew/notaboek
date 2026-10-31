@@ -1,3 +1,7 @@
+import type { SearchOptions, SearchResults } from './search'
+
+export type { SearchLine, SearchOptions, SearchResults, TextRange } from './search'
+
 export type TextEncodingName = 'utf8' | 'utf16le' | 'utf16be' | 'windows-1252'
 
 export interface TreeEntry {
@@ -59,7 +63,9 @@ export interface Capabilities {
 
 export interface Session {
   workspace: string | null
+  // The tab that was showing, and every tab that was open.
   file: string | null
+  tabs: string[]
   recent: string[]
   defaultFolder: string
   samplesFolder: string
@@ -70,7 +76,7 @@ export interface Opened {
   file: string | null
 }
 
-export interface FolioApi {
+export interface NotaboekApi {
   capabilities: Capabilities
   getSyncStatus(): Promise<SyncStatus>
   onSyncStatus(listener: (status: SyncStatus) => void): () => void
@@ -88,8 +94,10 @@ export interface FolioApi {
   chooseDefaultFolder(): Promise<string | null>
   showDefaultFolder(): Promise<void>
   takePendingFile(): Promise<Opened | null>
-  rememberFile(path: string | null): Promise<void>
+  rememberTabs(tabs: string[], active: string | null): Promise<void>
   listDir(dir: string): Promise<TreeEntry[]>
+  // Looks through the open folder. A newer search ends any still running.
+  searchFiles(query: string, options: SearchOptions): Promise<SearchResults>
   readFile(path: string): Promise<FileSnapshot>
   // `expectedMtime` guards against overwriting an outside change. Null overwrites.
   writeFile(
@@ -105,6 +113,9 @@ export interface FolioApi {
   // With no folder given, this asks for one. Null means the user cancelled.
   move(paths: string[], dir: string | null): Promise<MoveResult | null>
   trash(paths: string[]): Promise<TrashResult | null>
+  // Both resolve to paths to write in the page, relative to `dir`.
+  pickImages(dir: string): Promise<string[]>
+  saveImage(dir: string, name: string, bytes: Uint8Array): Promise<string>
   reveal(path: string): void
   openExternal(url: string): void
   setTheme(theme: 'light' | 'dark'): void

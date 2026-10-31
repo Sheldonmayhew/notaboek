@@ -10,7 +10,7 @@ import { poolFrom } from './testPool'
 // The whole web version on this computer, on a throwaway in-memory database. Used
 // by the end-to-end test, and handy for trying the web version before deploying.
 const port = Number(process.env.PORT ?? 8787)
-const site = process.env.FOLIO_SITE ?? 'dist-web'
+const site = process.env.NOTABOEK_SITE ?? 'dist-web'
 const baseURL = `http://localhost:${port}`
 
 const TYPES: Record<string, string> = {
@@ -38,4 +38,4 @@ serve({
   }
 })
 
-console.log(`Folio is running at ${baseURL}`)
+console.log(`Notaboek is running at ${baseURL}`)

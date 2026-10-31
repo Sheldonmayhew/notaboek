@@ -1,4 +1,15 @@
-import { Code2, FolderSearch, Maximize2, Menu as MenuIcon, Monitor, Moon, MoreHorizontal, Sun, Type } from 'lucide-react'
+import {
+  Code2,
+  FolderSearch,
+  Maximize2,
+  Menu as MenuIcon,
+  Monitor,
+  Moon,
+  MoreHorizontal,
+  Search,
+  Sun,
+  Type
+} from 'lucide-react'
 import { useRef, useState } from 'react'
 import type { SaveStatus } from '../doc/saveSession'
 import { api, baseName, relativeTo, stripExtension } from '../platform'
@@ -36,6 +47,7 @@ interface TopbarProps {
   onPrefs: (change: Partial<Prefs>) => void
   onExpandSidebar: () => void
   onToggleSource: () => void
+  onFind: () => void
   onReveal: () => void
   countWords: () => number
 }
@@ -126,6 +138,18 @@ export function Topbar(props: TopbarProps) {
             ))}
           </div>
           <div className="menu-separator" />
+          <button
+            type="button"
+            className="menu-item"
+            onClick={() => {
+              setMenuOpen(false)
+              props.onFind()
+            }}
+          >
+            <Search size={18} strokeWidth={1.75} />
+            <span className="menu-item-title">Find in page</span>
+            <span className="menu-item-hint">Ctrl+F</span>
+          </button>
           <button type="button" className="menu-item" onClick={() => onPrefs({ smallText: !prefs.smallText })}>
             <Type size={18} strokeWidth={1.75} />
             <span className="menu-item-title">Small text</span>

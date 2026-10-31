@@ -28,7 +28,7 @@ const bulletAttrs = (token: Token, tokens: Token[], index: number) => ({
 
 const parserTokens = {
   blockquote: { block: 'blockquote' },
-  paragraph: { block: 'paragraph' },
+  paragraph: { block: 'paragraph', getAttrs: (token: Token) => ({ piece: token.meta?.piece ?? null }) },
   list_item: { block: 'listItem' },
   bullet_list: { block: 'bulletList', getAttrs: bulletAttrs },
   ordered_list: {

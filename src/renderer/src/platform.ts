@@ -1,12 +1,12 @@
-import type { FolioApi } from '../../shared/api'
+import type { NotaboekApi } from '../../shared/api'
 
 declare global {
   interface Window {
-    folio: FolioApi
+    notaboek: NotaboekApi
   }
 }
 
-export const api = window.folio
+export const api = window.notaboek
 
 // A drive root like C:\ has no last segment, so it stands for itself.
 export const baseName = (path: string) =>
@@ -37,7 +37,7 @@ export function friendlyError(error: unknown): string {
   const message = raw.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
   if (/ENOENT/.test(message)) return "That file doesn't exist any more."
   if (/EPERM|EACCES/.test(message)) {
-    return "Folio doesn't have permission to change this file. It may be read-only or open in another program."
+    return "Notaboek doesn't have permission to change this file. It may be read-only or open in another program."
   }
   if (/EBUSY/.test(message)) return 'Another program is using this file. Close it and try again.'
   if (/ENOSPC/.test(message)) return 'Your disk is full, so this file could not be saved.'
