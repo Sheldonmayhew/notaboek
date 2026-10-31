@@ -1,0 +1,9 @@
+node_modules
+out
+dist
+test-results
+build/.icon-profile
+dist-web
+dist-server
+.vercel
+.env*
