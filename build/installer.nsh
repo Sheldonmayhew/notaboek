@@ -12,6 +12,7 @@
 !include nsDialogs.nsh
 
 !define NOTABOEK_DOCUMENT "Notaboek.Document"
+!define NOTABOEK_CAPABILITIES "Software\Notaboek\Capabilities"
 !define NOTABOEK_FOLDER_FILE "$APPDATA\Notaboek\default-folder.txt"
 !define OLD_FOLDER_FILE "$APPDATA\Folio\default-folder.txt"
 
@@ -147,6 +148,16 @@
   WriteRegNone SHELL_CONTEXT "Software\Classes\.markdown\OpenWithProgids" "${NOTABOEK_DOCUMENT}"
   WriteRegNone SHELL_CONTEXT "Software\Classes\.txt\OpenWithProgids" "${NOTABOEK_DOCUMENT}"
 
+  ; Puts the app in Settings > Apps > Default apps, where someone can choose it.
+  ; This only offers it. The defaults themselves stay as they are.
+  WriteRegStr SHELL_CONTEXT "${NOTABOEK_CAPABILITIES}" "ApplicationName" "Notaboek"
+  WriteRegStr SHELL_CONTEXT "${NOTABOEK_CAPABILITIES}" "ApplicationDescription" "A calm, block-style editor for plain .md and .txt files."
+  WriteRegStr SHELL_CONTEXT "${NOTABOEK_CAPABILITIES}" "ApplicationIcon" "$INSTDIR\${APP_EXECUTABLE_FILENAME},0"
+  WriteRegStr SHELL_CONTEXT "${NOTABOEK_CAPABILITIES}\FileAssociations" ".md" "${NOTABOEK_DOCUMENT}"
+  WriteRegStr SHELL_CONTEXT "${NOTABOEK_CAPABILITIES}\FileAssociations" ".markdown" "${NOTABOEK_DOCUMENT}"
+  WriteRegStr SHELL_CONTEXT "${NOTABOEK_CAPABILITIES}\FileAssociations" ".txt" "${NOTABOEK_DOCUMENT}"
+  WriteRegStr SHELL_CONTEXT "Software\RegisteredApplications" "Notaboek" "${NOTABOEK_CAPABILITIES}"
+
   System::Call 'shell32::SHChangeNotify(i 0x08000000, i 0, p 0, p 0)'
 
   ; Empty when the page didn't run, as in a silent install. The app then uses
@@ -173,6 +184,8 @@
   DeleteRegValue SHELL_CONTEXT "Software\Classes\.markdown\OpenWithProgids" "${NOTABOEK_DOCUMENT}"
   DeleteRegValue SHELL_CONTEXT "Software\Classes\.txt\OpenWithProgids" "${NOTABOEK_DOCUMENT}"
   DeleteRegKey SHELL_CONTEXT "Software\Classes\${NOTABOEK_DOCUMENT}"
+  DeleteRegValue SHELL_CONTEXT "Software\RegisteredApplications" "Notaboek"
+  DeleteRegKey SHELL_CONTEXT "Software\Notaboek"
 
   System::Call 'shell32::SHChangeNotify(i 0x08000000, i 0, p 0, p 0)'
 !macroend
