@@ -152,7 +152,7 @@ export class DesktopSync {
   }
 
   async signIn(action: 'sign-in' | 'sign-up', email: string, password: string, folder: string): Promise<void> {
-    if (!this.available) throw new Error('Sync is not set up in this version of Folio.')
+    if (!this.available) throw new Error('Sync is not set up in this version of Notaboek.')
     const credentials = await requestAccount(CLOUD_URL, action, email, password, net.fetch.bind(net) as typeof fetch)
     if (!safeStorage.isEncryptionAvailable()) throw new Error('Windows cannot protect a saved sign-in on this computer.')
     const account = { email: credentials.email, folder, token: credentials.token }

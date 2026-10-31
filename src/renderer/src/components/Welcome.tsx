@@ -20,7 +20,7 @@ export function Logo({ size = 40 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 40 40" aria-hidden="true">
       <rect width="40" height="40" rx="9" fill="currentColor" />
-      <path d="M13 10h15v4.2H17.8v5.6h9v4.1h-9V31H13z" fill="var(--bg)" />
+      <path d="M12.5 10h4.4L24 22.4V10h4v20h-4.3l-7.2-12.5V30h-4z" fill="var(--bg)" />
     </svg>
   )
 }

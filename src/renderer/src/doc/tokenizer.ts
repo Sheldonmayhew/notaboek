@@ -5,6 +5,8 @@ export type Flavor = 'md' | 'txt'
 
 const TASK_MARKER = /^\[([ xX])\](?:\s+|$)/
 const CALLOUT_MARKER = new RegExp(`^\\[!(${CALLOUT_KINDS.join('|')})\\][ \\t]*(?:\\n|$)`, 'i')
+const LONG_PARAGRAPH_LINES = 400
+const PARAGRAPH_PIECE_LINES = 200
 
 // Finds the token that closes the block opened at `open`.
 function closingIndex(tokens: Token[], open: number): number {
@@ -132,6 +134,40 @@ function keepIndentation(state: StateCore): void {
   })
 }
 
+// A log with no blank lines is one paragraph of perhaps a hundred thousand lines,
+// and a browser lays a paragraph out whole, on every key. In pieces, only the ones
+// in view cost anything. Each stays a block of the file, joined by its line break.
+function splitLongParagraphs(state: StateCore): void {
+  const tokens: Token[] = []
+  state.tokens.forEach((token, index) => {
+    const open = state.tokens[index - 1]
+    const opened = open?.type === 'paragraph_open' && open.level === 0 && token.type === 'inline'
+    const [start, end] = (opened && open.map) || [0, 0]
+    if (end - start <= LONG_PARAGRAPH_LINES) {
+      tokens.push(token)
+      return
+    }
+
+    tokens.pop()
+    const lines = token.content.split('\n')
+    for (let from = start; from < end; from += PARAGRAPH_PIECE_LINES) {
+      const to = Math.min(from + PARAGRAPH_PIECE_LINES, end)
+      const pieceOpen = new state.Token('paragraph_open', 'p', 1)
+      const inline = new state.Token('inline', '', 0)
+      const pieceClose = new state.Token('paragraph_close', 'p', -1)
+      pieceOpen.map = [from, to]
+      pieceOpen.meta = { piece: from === start ? 'first' : to === end ? 'last' : 'middle' }
+      inline.map = [from, to]
+      inline.level = 1
+      inline.children = []
+      inline.content = lines.slice(from - start, to - start).join('\n')
+      tokens.push(pieceOpen, inline)
+      if (to < end) tokens.push(pieceClose)
+    }
+  })
+  state.tokens = tokens
+}
+
 function literalNewline(state: StateInline, silent: boolean): boolean {
   if (state.src.charCodeAt(state.pos) !== 0x0a) return false
   if (!silent) {
@@ -152,11 +188,12 @@ export function createTokenizer(flavor: Flavor) {
     // block structure and bare web addresses are read from a .txt file.
     md.disable(['entity', 'escape', 'code', 'reference', 'emphasis', 'strikethrough'])
     md.disable(['backticks', 'link', 'image', 'autolink', 'html_inline', 'html_block'])
-    md.core.ruler.after('block', 'folio_indentation', keepIndentation)
+    md.core.ruler.after('block', 'notaboek_indentation', keepIndentation)
+    md.core.ruler.after('notaboek_indentation', 'notaboek_long_paragraphs', splitLongParagraphs)
     md.inline.ruler.at('newline', literalNewline)
   }
 
-  md.core.ruler.after('block', 'folio_blocks', blockRule)
-  md.core.ruler.after('inline', 'folio_soft_breaks', softBreakRule(flavor))
+  md.core.ruler.after('block', 'notaboek_blocks', blockRule)
+  md.core.ruler.after('inline', 'notaboek_soft_breaks', softBreakRule(flavor))
   return md
 }

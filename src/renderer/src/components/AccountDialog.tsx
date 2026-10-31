@@ -48,11 +48,11 @@ export function AccountDialog({ folder, onClose, onDone }: AccountDialogProps) {
       <form onSubmit={(event) => void submit(event)}>
         <h2 id="account-title">{creating ? 'Create an account' : 'Sign in to sync'}</h2>
         <p>
-          Syncing is optional. Your pages are also kept in Folio&apos;s database, so your other devices can reach them.
+          Syncing is optional. Your pages are also kept in Notaboek&apos;s database, so your other devices can reach them.
         </p>
         {api.capabilities.localFiles && (
           <p>
-            Folio will sync <span className="account-folder">{folder}</span>
+            Notaboek will sync <span className="account-folder">{folder}</span>
           </p>
         )}
 

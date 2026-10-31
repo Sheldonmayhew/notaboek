@@ -20,6 +20,8 @@
   --accent: #2383e2;
   --accent-text: #ffffff;
   --selection: rgba(35, 131, 226, 0.28);
+  --find-match: rgba(255, 212, 0, 0.38);
+  --find-current: rgba(255, 150, 0, 0.62);
   --danger: #d44c47;
   --inline-code-bg: rgba(135, 131, 120, 0.15);
   --inline-code-text: #eb5757;
@@ -61,6 +63,8 @@
   --border-strong: rgba(255, 255, 255, 0.16);
   --accent: #2383e2;
   --selection: rgba(35, 131, 226, 0.4);
+  --find-match: rgba(255, 212, 0, 0.24);
+  --find-current: rgba(255, 150, 0, 0.55);
   --danger: #df5452;
   --inline-code-bg: rgba(135, 131, 120, 0.25);
   --inline-code-text: #ff7369;

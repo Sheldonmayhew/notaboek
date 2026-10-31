@@ -5,6 +5,7 @@ import Suggestion, { exitSuggestion, type SuggestionKeyDownProps, type Suggestio
 import { computePosition, flip, offset, shift } from '@floating-ui/dom'
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { filterBlocks, leaveList, type BlockType } from './blockTypes'
+import { canInsertImages } from './images'
 
 interface SlashListHandle {
   onKeyDown: (event: KeyboardEvent) => boolean
@@ -74,6 +75,8 @@ const SlashList = forwardRef<SlashListHandle, SlashListProps>(function SlashList
 })
 
 const slashKey = new PluginKey('slashCommand')
+
+export const closeSlashMenu = (editor: Editor) => exitSuggestion(editor.view, slashKey)
 
 function createRenderer() {
   let component: ReactRenderer<SlashListHandle, SlashListProps> | null = null
@@ -146,7 +149,8 @@ export const SlashCommand = Extension.create({
           }
           return true
         },
-        items: ({ query }) => filterBlocks(query),
+        items: ({ query, editor }) =>
+          filterBlocks(query).filter((block) => block.id !== 'image' || canInsertImages(editor)),
         command: ({ editor, range, props }: { editor: Editor; range: Range; props: BlockType }) => {
           editor.chain().focus().deleteRange(range).run()
           leaveList(editor, props)

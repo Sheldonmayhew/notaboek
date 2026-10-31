@@ -26,10 +26,10 @@ export class CrashScreen extends Component<CrashScreenProps, CrashScreenState> {
         <div className="welcome-drag" />
         <div className="welcome-card">
           <h1>Something went wrong.</h1>
-          <p>Folio hit an unexpected problem. Your files are saved as you type, so reloading should bring you back.</p>
+          <p>Notaboek hit an unexpected problem. Your files are saved as you type, so reloading should bring you back.</p>
           <div className="welcome-actions">
             <button type="button" className="welcome-action" onClick={() => location.reload()}>
-              Reload Folio
+              Reload Notaboek
             </button>
           </div>
           <p className="crash-detail">{error.message}</p>

@@ -1,15 +1,60 @@
-import { promises as fs } from 'node:fs'
+import { constants, cpSync, existsSync, promises as fs, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
-import type { FileSnapshot, MoveResult, SaveResult, TextEncodingName, TreeEntry } from '../shared/api'
+import type {
+  FileSnapshot,
+  MoveResult,
+  SaveResult,
+  SearchOptions,
+  SearchResults,
+  TextEncodingName,
+  TreeEntry
+} from '../shared/api'
 import { decodeText, encodeText } from '../shared/encoding'
+import { MAX_SEARCH_HITS, searchPage } from '../shared/search'
 import type { LocalFile } from '../shared/sync/engine'
 
 export const TEXT_FILE = /\.(md|markdown|mdown|mkd|txt)$/i
+export const IMAGE_FILE = /\.(png|jpe?g|gif|webp|svg|bmp|avif)$/i
 
 const IGNORED = new Set(['node_modules', '$RECYCLE.BIN', 'System Volume Information'])
 const MAX_FILE_BYTES = 8 * 1024 * 1024
-const TEMP_SUFFIX = '.folio-tmp'
+const MAX_IMAGE_BYTES = 25 * 1024 * 1024
+const TEMP_SUFFIX = '.notaboek-tmp'
 const RESERVED_NAME = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\.|$)/i
+const FORBIDDEN_NAME_CHARACTERS = /[\\/:*?"<>|]/g
+
+// What's worth keeping from the app's old profile. Everything else is a cache.
+const PROFILE_ITEMS = [
+  'default-folder.txt',
+  'account.json',
+  'sync-state.json',
+  'Sample pages',
+  'Local State',
+  'Local Storage',
+  'settings.json'
+]
+
+// Copies the profile from when the app was called Folio, the first time it runs
+// under its new name. The installer may have made the new folder already, so what
+// marks this as done is settings.json, which comes last.
+export function adoptProfile(from: string, to: string): void {
+  const settings = path.join(to, 'settings.json')
+  if (!existsSync(from) || existsSync(settings)) return
+  mkdirSync(to, { recursive: true })
+  for (const item of PROFILE_ITEMS) {
+    const target = path.join(to, item)
+    if (existsSync(target) || !existsSync(path.join(from, item))) continue
+    try {
+      cpSync(path.join(from, item), target, { recursive: true })
+    } catch {
+      // Held open by a copy of Folio that's still running. It stays usable there.
+    }
+  }
+  if (!existsSync(settings)) return
+  // Sample pages moved with the profile, so anything pointing at them has to follow.
+  const escaped = (folder: string) => JSON.stringify(folder).slice(1, -1)
+  writeFileSync(settings, readFileSync(settings, 'utf8').split(escaped(from)).join(escaped(to)))
+}
 
 // Shared with the installer, which can only write plain text, so this isn't in
 // settings.json. UTF-16 keeps any folder name intact.
@@ -187,18 +232,87 @@ export function writeOnClose(
   })
 }
 
-export async function createUniqueFile(dir: string, name: string): Promise<string> {
+// `write` has to fail if the file exists, so two writes can never share a name.
+async function writeUnique(dir: string, name: string, write: (file: string) => Promise<void>): Promise<string> {
   const { name: base, ext } = path.parse(path.basename(name))
   for (let attempt = 1; attempt < 1000; attempt++) {
     const candidate = path.join(dir, attempt === 1 ? `${base}${ext}` : `${base} ${attempt}${ext}`)
     try {
-      await fs.writeFile(candidate, '', { flag: 'wx' })
+      await write(candidate)
       return candidate
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
     }
   }
   throw new Error('Could not find a free file name.')
+}
+
+export const createUniqueFile = (dir: string, name: string) =>
+  writeUnique(dir, name, (file) => fs.writeFile(file, '', { flag: 'wx' }))
+
+function checkImageName(name: string): string {
+  const clean = path.win32.basename(name).replace(FORBIDDEN_NAME_CHARACTERS, '').trim()
+  if (!IMAGE_FILE.test(clean)) throw new Error("That isn't an image Notaboek can show.")
+  return RESERVED_NAME.test(clean) ? `image ${clean}` : clean
+}
+
+// How a page refers to an image: relative to it, with forward slashes, and with
+// a literal % kept from reading as an escape.
+const imageLink = (dir: string, file: string) => path.relative(dir, file).split(path.sep).join('/').replace(/%/g, '%25')
+
+export async function saveImage(dir: string, name: string, bytes: Uint8Array): Promise<string> {
+  if (bytes.length > MAX_IMAGE_BYTES) throw new Error('This image is too large to add (the limit is 25 MB).')
+  const file = await writeUnique(dir, checkImageName(name), (target) => fs.writeFile(target, bytes, { flag: 'wx' }))
+  return imageLink(dir, file)
+}
+
+// An image already in the open folder stays where it is. Anything else gets a
+// copy beside the page, so the page doesn't depend on a file somewhere else.
+export async function importImage(source: string, dir: string, root: string): Promise<string> {
+  const relative = path.relative(root, source)
+  if (!relative.startsWith('..') && !path.isAbsolute(relative)) return imageLink(dir, source)
+  const { size } = await fs.stat(source)
+  if (size > MAX_IMAGE_BYTES) throw new Error('This image is too large to add (the limit is 25 MB).')
+  const copied = await writeUnique(dir, checkImageName(source), (target) =>
+    fs.copyFile(source, target, constants.COPYFILE_EXCL)
+  )
+  return imageLink(dir, copied)
+}
+
+async function searchFile(file: string, query: string, options: SearchOptions) {
+  try {
+    const { size } = await fs.stat(file)
+    if (size > MAX_FILE_BYTES) return null
+    return searchPage(file, decode(await fs.readFile(file)).text, query, options)
+  } catch {
+    // Locked, or not text after all. One such file shouldn't cost the whole search.
+    return null
+  }
+}
+
+export async function searchFolder(
+  root: string,
+  query: string,
+  options: SearchOptions,
+  isCurrent: () => boolean
+): Promise<SearchResults> {
+  const results: SearchResults = { hits: [], truncated: false }
+  const walk = async (dir: string): Promise<void> => {
+    const entries = await listDir(dir).catch((): TreeEntry[] => [])
+    for (const entry of entries) {
+      if (results.truncated || !isCurrent()) return
+      if (entry.kind === 'folder') {
+        await walk(entry.path)
+        continue
+      }
+      const hit = await searchFile(entry.path, query, options)
+      if (!hit) continue
+      if (results.hits.length >= MAX_SEARCH_HITS) results.truncated = true
+      else results.hits.push(hit)
+    }
+  }
+  await walk(root)
+  return results
 }
 
 async function freePath(dir: string, name: string, ext: string): Promise<string> {

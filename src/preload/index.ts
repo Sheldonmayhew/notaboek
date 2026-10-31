@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { FolioApi, SyncStatus, TableAction } from '../shared/api'
+import type { NotaboekApi, SyncStatus, TableAction } from '../shared/api'
 
 const subscribe = <T extends unknown[]>(channel: string, listener: (...args: T) => void) => {
   const handler = (_event: unknown, ...args: T) => listener(...args)
@@ -7,7 +7,7 @@ const subscribe = <T extends unknown[]>(channel: string, listener: (...args: T) 
   return () => void ipcRenderer.removeListener(channel, handler as never)
 }
 
-const api: FolioApi = {
+const api: NotaboekApi = {
   capabilities: { localFiles: true, windowKeys: true, sync: ipcRenderer.sendSync('sync:available') },
   getSyncStatus: () => ipcRenderer.invoke('sync:status'),
   onSyncStatus: (listener) => subscribe<[SyncStatus]>('sync:status', listener),
@@ -25,8 +25,9 @@ const api: FolioApi = {
   chooseDefaultFolder: () => ipcRenderer.invoke('default:choose'),
   showDefaultFolder: () => ipcRenderer.invoke('default:show'),
   takePendingFile: () => ipcRenderer.invoke('open:pending'),
-  rememberFile: (path) => ipcRenderer.invoke('session:file', path),
+  rememberTabs: (tabs, active) => ipcRenderer.invoke('session:tabs', tabs, active),
   listDir: (dir) => ipcRenderer.invoke('fs:list', dir),
+  searchFiles: (query, options) => ipcRenderer.invoke('fs:search', query, options),
   readFile: (path) => ipcRenderer.invoke('fs:read', path),
   writeFile: (path, text, encoding, expectedMtime) =>
     ipcRenderer.invoke('fs:write', path, text, encoding, expectedMtime),
@@ -36,6 +37,8 @@ const api: FolioApi = {
   rename: (path, name) => ipcRenderer.invoke('fs:rename', path, name),
   move: (paths, dir) => ipcRenderer.invoke('fs:move', paths, dir),
   trash: (paths) => ipcRenderer.invoke('fs:trash', paths),
+  pickImages: (dir) => ipcRenderer.invoke('images:pick', dir),
+  saveImage: (dir, name, bytes) => ipcRenderer.invoke('images:save', dir, name, bytes),
   reveal: (path) => ipcRenderer.send('shell:reveal', path),
   openExternal: (url) => ipcRenderer.send('shell:external', url),
   setTheme: (theme) => ipcRenderer.send('theme:set', theme),
@@ -47,4 +50,4 @@ const api: FolioApi = {
   onFilesChanged: (listener) => subscribe<[]>('files:changed', listener)
 }
 
-contextBridge.exposeInMainWorld('folio', api)
+contextBridge.exposeInMainWorld('notaboek', api)

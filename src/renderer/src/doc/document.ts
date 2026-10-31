@@ -60,6 +60,28 @@ function lineOffsets(text: string): number[] {
   return offsets
 }
 
+const lineBreaks = (text: string) => text.match(/\n/g)?.length ?? 0
+
+// Where a line of the file begins, in text that uses \n throughout.
+export function offsetOfLine(text: string, line: number): number {
+  return lineOffsets(text)[line] ?? text.length
+}
+
+// Finds the block of the page that a line of the file ended up in, so a search
+// result can land near its match. Frontmatter counts as the top of the page.
+export function positionOfLine(loaded: LoadedDocument, line: number): number {
+  if (loaded.blocks.length !== loaded.doc.childCount) return 0
+  let reached = lineBreaks(loaded.head)
+  let position = 0
+  for (let index = 0; index < loaded.blocks.length; index++) {
+    const { source, gap } = loaded.blocks[index]
+    reached += lineBreaks(source) + lineBreaks(gap)
+    if (line < reached) return position
+    position += loaded.doc.child(index).nodeSize
+  }
+  return position
+}
+
 export function parseDocument(raw: string, flavor: Flavor): LoadedDocument {
   const bom = raw.charCodeAt(0) === 0xfeff
   const eol = dominantEol(raw)
@@ -182,7 +204,7 @@ export function serializeDocument(doc: PMNode, loaded: LoadedDocument): string {
   // The original spacing between two blocks, if they are still neighbours. An
   // edited block stands in for the original next to it, so it keeps that spacing
   // too, unless the gap had no blank line and the new text could merge across it.
-  const gapBetween = (previous: number, origin: number): string => {
+  const gapBetween = (previous: number, origin: number, before: PMNode, after: PMNode): string => {
     const slot =
       previous !== -1 && (origin === previous + 1 || (origin === -1 && !present.has(previous + 1)))
         ? previous
@@ -192,14 +214,16 @@ export function serializeDocument(doc: PMNode, loaded: LoadedDocument): string {
     const gap = blocks[slot]?.gap
     if (gap === undefined || slot === blocks.length - 1) return '\n\n'
     const bothOriginal = previous !== -1 && origin !== -1
-    if (!bothOriginal && !/\n[ \t]*\n/.test(gap)) return '\n\n'
+    // Pieces of one long paragraph are only lines of text, so merging is harmless.
+    const sameParagraph = before.attrs.piece && after.attrs.piece
+    if (!bothOriginal && !sameParagraph && !/\n[ \t]*\n/.test(gap)) return '\n\n'
     usedGaps.add(slot)
     return gap
   }
 
   nodes.forEach((node, index) => {
     const origin = kept[index]
-    if (index > 0) out += gapBetween(kept[index - 1], origin)
+    if (index > 0) out += gapBetween(kept[index - 1], origin, nodes[index - 1], node)
     out += origin === -1 ? serializeBlock(node, flavor) : blocks[origin].source
   })
 

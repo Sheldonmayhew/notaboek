@@ -1,12 +1,12 @@
 ---
-title: Welcome to Folio
+title: Welcome to Notaboek
 status: Getting started
 tags: [guide, samples]
 ---
 
-# Welcome to Folio
+# Welcome to Notaboek
 
-Folio turns plain `.md` and `.txt` files into pages you'll enjoy writing in. **Everything here is still an ordinary text file**, so it opens anywhere, syncs anywhere and belongs to you.
+Notaboek turns plain `.md` and `.txt` files into pages you'll enjoy writing in. **Everything here is still an ordinary text file**, so it opens anywhere, syncs anywhere and belongs to you.
 
 > [!TIP]
 > Press `/` on an empty line to see every block you can add. Click the icon on this callout to change its type.
@@ -59,6 +59,6 @@ function greet(name) {
 ---
 
 > [!NOTE]
-> Folio only rewrites the blocks you change. Everything else in the file stays byte for byte as it was, so it's safe to use on notes you care about.
+> Notaboek only rewrites the blocks you change. Everything else in the file stays byte for byte as it was, so it's safe to use on notes you care about.
 
 Have a look at [Meeting notes](Meeting%20notes.txt) to see what a plain `.txt` file looks like here. Hold Ctrl and click a link to follow it.

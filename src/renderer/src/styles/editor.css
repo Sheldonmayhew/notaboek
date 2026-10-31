@@ -105,19 +105,76 @@
   padding: 0 7px;
 }
 
-.source-view {
-  background: none;
-  border: 0;
-  color: var(--text);
-  flex: 1;
+/* The page scrolls the whole file, so matches drawn underneath stay lined up. */
+.source-frame {
+  flex: 1 0 auto;
   font-family: var(--font-mono);
   font-size: 0.875em;
   line-height: 1.6;
   min-height: 60vh;
+  position: relative;
+}
+
+.source-view {
+  background: none;
+  border: 0;
+  color: var(--text);
+  display: block;
+  field-sizing: content;
+  height: 100%;
+  line-height: inherit;
+  min-height: 60vh;
   outline: 0;
+  overflow: hidden;
   padding: 0;
+  position: relative;
   resize: none;
   width: 100%;
+}
+
+.source-marks {
+  color: transparent;
+  inset: 0;
+  overflow-wrap: break-word;
+  pointer-events: none;
+  position: absolute;
+  user-select: none;
+  white-space: pre-wrap;
+}
+
+.find-match {
+  background: var(--find-match);
+  border-radius: 2px;
+}
+
+.find-current {
+  background: var(--find-current);
+  scroll-margin: 96px 24px;
+}
+
+/* Most of a long page is off screen, and laying all of it out is what makes it
+   slow, so blocks out of view are skipped. A fixed size is deliberate: "auto" would
+   remember each block's real size, but tracking that costs twice as much on every
+   key. content-visibility: hidden with our own range of blocks to draw is faster
+   still, but freezes the app when a screen reader or dictation tool is attached. */
+.page-content[data-large] > * {
+  content-visibility: auto;
+  contain-intrinsic-block-size: 1.9em;
+}
+
+/* The parts of one long paragraph in a .txt file still read as unbroken lines. */
+.page-content p[data-piece] {
+  contain-intrinsic-block-size: 300em;
+}
+
+.page-content p[data-piece='first'],
+.page-content p[data-piece='middle'] {
+  padding-bottom: 0;
+}
+
+.page-content p[data-piece='middle'],
+.page-content p[data-piece='last'] {
+  padding-top: 0;
 }
 
 /* Blocks */

@@ -81,7 +81,7 @@ export class SyncController {
       else if (error instanceof SyncPaused) {
         this.update({ phase: 'paused', message: error.message, missing: error.missing })
       } else if (error instanceof QuotaFull) this.update({ phase: 'error', message: error.message })
-      else if (error instanceof TypeError) this.update({ phase: 'offline', message: "Folio can't reach the internet." })
+      else if (error instanceof TypeError) this.update({ phase: 'offline', message: "Notaboek can't reach the internet." })
       else this.update({ phase: 'error', message: (error as Error).message })
     }
   }
@@ -114,7 +114,7 @@ const friendlyAuthError = async (response: Response) => {
   if (body?.code?.includes('USER_ALREADY_EXISTS')) return 'That email already has an account. Try signing in.'
   if (body?.code?.includes('PASSWORD_TOO_SHORT')) return 'Use a password of at least 8 characters.'
   if (body?.code?.includes('INVALID_EMAIL')) return "That doesn't look like an email address."
-  return body?.message ?? 'Folio could not sign you in.'
+  return body?.message ?? 'Notaboek could not sign you in.'
 }
 
 export async function requestAccount(
@@ -135,7 +135,7 @@ export async function requestAccount(
       body: JSON.stringify({ email, password, ...(action === 'sign-up' ? { name: email } : {}) })
     })
   } catch {
-    throw new Error("Folio can't reach the internet.")
+    throw new Error("Notaboek can't reach the internet.")
   }
   if (!response.ok) throw new Error(await friendlyAuthError(response))
   const body = (await response.json()) as { token: string; user: { email: string } }

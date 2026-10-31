@@ -1,14 +1,16 @@
 import type {
   FileSnapshot,
-  FolioApi,
   MoveResult,
+  NotaboekApi,
   SaveResult,
+  SearchResults,
   SyncStatus,
   TextEncodingName,
   TrashResult,
   TreeEntry
 } from '../../src/shared/api'
 import { decodeText, encodeText } from '../../src/shared/encoding'
+import { MAX_SEARCH_HITS, searchPage } from '../../src/shared/search'
 import { createRemote } from '../../src/shared/sync/client'
 import { SyncController, requestAccount } from '../../src/shared/sync/controller'
 import { isSafePath, pathKey } from '../../src/shared/sync/paths'
@@ -17,9 +19,10 @@ import { browserDrive, clearBrowserData, loadSyncState, saveSyncState } from './
 
 // Runs before the editor loads, and gives it the same API the desktop app has.
 
-const ROOT = '/Folio'
+const ROOT = '/Notaboek'
 const DEVICE = 'Web'
 const LAST_FILE = 'folio.lastFile'
+const OPEN_TABS = 'notaboek.tabs'
 const UNSAVED = 'folio.unsaved'
 const ACCOUNT_EMAIL = 'folio.email'
 const CHANGE_DELAY = 3_000
@@ -93,12 +96,29 @@ function connect(email: string) {
   publish(controller.status)
 }
 
+interface UnsavedPage {
+  path: string
+  text: string
+  encoding: TextEncodingName
+}
+
+// Several tabs can have text waiting. Before tabs this held a single page.
+const readUnsaved = () => [JSON.parse(localStorage.getItem(UNSAVED) ?? '[]') as UnsavedPage | UnsavedPage[]].flat()
+
 async function restoreUnsaved() {
-  const saved = localStorage.getItem(UNSAVED)
-  if (!saved) return
-  const { path, text, encoding } = JSON.parse(saved) as { path: string; text: string; encoding: TextEncodingName }
-  await browserDrive.write(path, encodeText(text, encoding).bytes)
+  for (const { path, text, encoding } of readUnsaved()) {
+    await browserDrive.write(path, encodeText(text, encoding).bytes)
+  }
   localStorage.removeItem(UNSAVED)
+}
+
+function savedTabs(): string[] {
+  try {
+    const tabs = JSON.parse(localStorage.getItem(OPEN_TABS) ?? '[]')
+    return Array.isArray(tabs) ? tabs : []
+  } catch {
+    return []
+  }
 }
 
 async function startAccount() {
@@ -118,7 +138,7 @@ async function startAccount() {
   } else if (remembered) {
     // Probably offline. Pages still work, and sync picks up when the connection does.
     connect(remembered)
-    publish({ ...status, phase: 'offline', message: "Folio can't reach the internet." })
+    publish({ ...status, phase: 'offline', message: "Notaboek can't reach the internet." })
   }
 }
 
@@ -154,7 +174,7 @@ async function moveEntry(from: string, to: string): Promise<void> {
   for (const file of inside) await browserDrive.move(file.path, `${to}${file.path.slice(from.length)}`)
 }
 
-const api: FolioApi = {
+const api: NotaboekApi = {
   capabilities: { localFiles: false, windowKeys: false, sync: true },
 
   async getSession() {
@@ -162,9 +182,14 @@ const api: FolioApi = {
     await startAccount()
     const file = localStorage.getItem(LAST_FILE)
     const exists = file ? await browserDrive.stat(toRelative(file)) : null
+    const tabs: string[] = []
+    for (const tab of savedTabs()) {
+      if (await browserDrive.stat(toRelative(tab))) tabs.push(tab)
+    }
     return {
       workspace: ROOT,
       file: exists ? file : null,
+      tabs,
       recent: [],
       defaultFolder: ROOT,
       // Nothing in the browser is ever in here, which is the point.
@@ -181,9 +206,27 @@ const api: FolioApi = {
   showDefaultFolder: async () => undefined,
   takePendingFile: async () => null,
 
-  async rememberFile(path) {
-    if (path) localStorage.setItem(LAST_FILE, path)
+  async rememberTabs(paths, active) {
+    localStorage.setItem(OPEN_TABS, JSON.stringify(paths))
+    if (active) localStorage.setItem(LAST_FILE, active)
     else localStorage.removeItem(LAST_FILE)
+  },
+
+  async searchFiles(query, options): Promise<SearchResults> {
+    const results: SearchResults = { hits: [], truncated: false }
+    if (!query) return results
+    for (const file of await browserDrive.list()) {
+      const bytes = await browserDrive.read(file.path).catch(() => null)
+      if (!bytes) continue
+      try {
+        const hit = searchPage(toAbsolute(file.path), decodeText(bytes).text, query, options)
+        if (hit && results.hits.length >= MAX_SEARCH_HITS) results.truncated = true
+        else if (hit) results.hits.push(hit)
+      } catch {
+        // Not text after all. One such file shouldn't cost the whole search.
+      }
+    }
+    return results
   },
 
   async listDir(dir) {
@@ -234,7 +277,7 @@ const api: FolioApi = {
   // The next visit picks the text up from here.
   writeFileSync(path, text, encoding) {
     try {
-      localStorage.setItem(UNSAVED, JSON.stringify({ path: toRelative(path), text, encoding }))
+      localStorage.setItem(UNSAVED, JSON.stringify([...readUnsaved(), { path: toRelative(path), text, encoding }]))
       return true
     } catch {
       return false
@@ -306,6 +349,10 @@ const api: FolioApi = {
     return { trashed: paths, failed: [] }
   },
 
+  // Nothing asks for these here: a browser has nowhere to keep an image.
+  pickImages: async () => [],
+  saveImage: () => Promise.reject(new Error("Images can't be added in the browser.")),
+
   reveal: () => undefined,
   openExternal: (url) => void window.open(url, '_blank', 'noopener'),
   setTheme: () => undefined,
@@ -345,7 +392,7 @@ const api: FolioApi = {
     await controller?.run()
     if (controller?.status.phase !== 'idle') {
       const leave = window.confirm(
-        "Some changes haven't reached Folio's servers and will be lost from this browser. Sign out anyway?"
+        "Some changes haven't reached Notaboek's servers and will be lost from this browser. Sign out anyway?"
       )
       if (!leave) return
     }
@@ -359,6 +406,7 @@ const api: FolioApi = {
     controller = null
     localStorage.removeItem(ACCOUNT_EMAIL)
     localStorage.removeItem(LAST_FILE)
+    localStorage.removeItem(OPEN_TABS)
     await clearBrowserData()
     location.reload()
   },
@@ -368,4 +416,4 @@ const api: FolioApi = {
 }
 
 disableLocalImages()
-window.folio = api
+window.notaboek = api
