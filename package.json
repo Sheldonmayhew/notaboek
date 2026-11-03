@@ -1,7 +1,7 @@
 {
   "name": "notaboek",
   "productName": "Notaboek",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "A calm, block-style editor for plain .md and .txt files.",
   "main": "out/main/index.js",
   "private": true,
