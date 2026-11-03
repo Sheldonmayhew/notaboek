@@ -19,7 +19,7 @@
   --border-strong: rgba(55, 53, 47, 0.16);
   --accent: #2383e2;
   --accent-text: #ffffff;
-  --selection: rgba(35, 131, 226, 0.28);
+  --selection: color-mix(in srgb, var(--accent) 28%, transparent);
   --find-match: rgba(255, 212, 0, 0.38);
   --find-current: rgba(255, 150, 0, 0.62);
   --danger: #d44c47;
@@ -36,6 +36,12 @@
   --callout-warning: #fbf3db;
   --callout-caution: #fdebec;
 
+  --highlight-yellow: #fff1a8;
+  --highlight-green: #ccf0d1;
+  --highlight-blue: #d3e5ff;
+  --highlight-pink: #ffd6e8;
+  --highlight-purple: #e6dcff;
+
   --shadow-menu: 0 0 0 1px rgba(15, 15, 15, 0.05), 0 3px 6px rgba(15, 15, 15, 0.1),
     0 9px 24px rgba(15, 15, 15, 0.2);
 
@@ -47,45 +53,191 @@
   --hl-attr: #e36209;
 }
 
-:root[data-theme='dark'] {
-  color-scheme: dark;
+/* Print is always on a white page, so the dark theme and page colours are for the screen only. */
+@media screen {
+  :root[data-theme='dark'] {
+    color-scheme: dark;
 
-  --bg: #191919;
-  --bg-sidebar: #202020;
-  --bg-menu: #252525;
-  --bg-code: #202020;
-  --text: rgba(255, 255, 255, 0.82);
-  --text-2: rgba(255, 255, 255, 0.55);
-  --text-3: rgba(255, 255, 255, 0.34);
-  --hover: rgba(255, 255, 255, 0.055);
-  --active: rgba(255, 255, 255, 0.09);
-  --border: rgba(255, 255, 255, 0.09);
-  --border-strong: rgba(255, 255, 255, 0.16);
+    --bg: #191919;
+    --bg-sidebar: #202020;
+    --bg-menu: #252525;
+    --bg-code: #202020;
+    --text: rgba(255, 255, 255, 0.82);
+    --text-2: rgba(255, 255, 255, 0.55);
+    --text-3: rgba(255, 255, 255, 0.34);
+    --hover: rgba(255, 255, 255, 0.055);
+    --active: rgba(255, 255, 255, 0.09);
+    --border: rgba(255, 255, 255, 0.09);
+    --border-strong: rgba(255, 255, 255, 0.16);
+    --accent: #2383e2;
+    --selection: color-mix(in srgb, var(--accent) 40%, transparent);
+    --find-match: rgba(255, 212, 0, 0.24);
+    --find-current: rgba(255, 150, 0, 0.55);
+    --danger: #df5452;
+    --inline-code-bg: rgba(135, 131, 120, 0.25);
+    --inline-code-text: #ff7369;
+    --banner-bg: #3a3320;
+    --banner-text: #e9d9a8;
+    --banner-error-bg: #3f2120;
+    --banner-error-text: #f2b8b5;
+
+    --callout-note: #1f2c33;
+    --callout-tip: #1f2c24;
+    --callout-important: #2a2433;
+    --callout-warning: #33291a;
+    --callout-caution: #352021;
+
+    --highlight-yellow: rgba(250, 204, 21, 0.3);
+    --highlight-green: rgba(52, 199, 89, 0.28);
+    --highlight-blue: rgba(80, 150, 255, 0.32);
+    --highlight-pink: rgba(255, 92, 160, 0.3);
+    --highlight-purple: rgba(160, 120, 255, 0.34);
+
+    --shadow-menu: 0 0 0 1px rgba(255, 255, 255, 0.08), 0 3px 6px rgba(0, 0, 0, 0.3),
+      0 9px 24px rgba(0, 0, 0, 0.5);
+
+    --hl-keyword: #ff7b72;
+    --hl-string: #7ee787;
+    --hl-number: #79c0ff;
+    --hl-comment: #8b949e;
+    --hl-title: #d2a8ff;
+    --hl-attr: #ffa657;
+  }
+
+  /* Page colours. Each one has a dark version, and the swatches that pick them
+     take the same values, so a swatch always shows what you'd get. */
+  :root[data-theme='dark'] .paper-swatch[data-paper='default'] {
+    --bg: #191919;
+  }
+
+  :root[data-theme='dark'][data-paper='paper'],
+  :root[data-theme='dark'] .paper-swatch[data-paper='paper'] {
+    --bg: #1e1c18;
+    --bg-sidebar: #24221d;
+    --bg-code: #27241f;
+  }
+
+  :root[data-theme='dark'][data-paper='sepia'],
+  :root[data-theme='dark'] .paper-swatch[data-paper='sepia'] {
+    --bg: #241e15;
+    --bg-sidebar: #2b241a;
+    --bg-code: #2e271c;
+  }
+
+  :root[data-theme='dark'][data-paper='mist'],
+  :root[data-theme='dark'] .paper-swatch[data-paper='mist'] {
+    --bg: #151a21;
+    --bg-sidebar: #1b2129;
+    --bg-code: #1e242d;
+  }
+
+  :root[data-theme='dark'][data-paper='sage'],
+  :root[data-theme='dark'] .paper-swatch[data-paper='sage'] {
+    --bg: #161c17;
+    --bg-sidebar: #1c231d;
+    --bg-code: #1f2720;
+  }
+
+  :root[data-theme='dark'][data-paper='blush'],
+  :root[data-theme='dark'] .paper-swatch[data-paper='blush'] {
+    --bg: #211819;
+    --bg-sidebar: #281e20;
+    --bg-code: #2b2022;
+  }
+
+  :root[data-theme='light'] .paper-swatch[data-paper='default'] {
+    --bg: #ffffff;
+  }
+
+  :root[data-theme='light'][data-paper='paper'],
+  :root[data-theme='light'] .paper-swatch[data-paper='paper'] {
+    --bg: #fbfaf6;
+    --bg-sidebar: #f4f2ec;
+    --bg-code: #f2f0e9;
+  }
+
+  :root[data-theme='light'][data-paper='sepia'],
+  :root[data-theme='light'] .paper-swatch[data-paper='sepia'] {
+    --bg: #f6efe0;
+    --bg-sidebar: #efe6d3;
+    --bg-code: #ede3cd;
+  }
+
+  :root[data-theme='light'][data-paper='mist'],
+  :root[data-theme='light'] .paper-swatch[data-paper='mist'] {
+    --bg: #f5f7fa;
+    --bg-sidebar: #edf0f5;
+    --bg-code: #ebeef3;
+  }
+
+  :root[data-theme='light'][data-paper='sage'],
+  :root[data-theme='light'] .paper-swatch[data-paper='sage'] {
+    --bg: #f3f6f1;
+    --bg-sidebar: #eaefe7;
+    --bg-code: #e8ede5;
+  }
+
+  :root[data-theme='light'][data-paper='blush'],
+  :root[data-theme='light'] .paper-swatch[data-paper='blush'] {
+    --bg: #fbf5f4;
+    --bg-sidebar: #f4eae8;
+    --bg-code: #f2e7e5;
+  }
+
+  :root[data-theme='dark'][data-accent='purple'],
+  :root[data-theme='dark'] .accent-swatch[data-accent='purple'] {
+    --accent: #8b6ff0;
+  }
+
+  :root[data-theme='dark'][data-accent='green'],
+  :root[data-theme='dark'] .accent-swatch[data-accent='green'] {
+    --accent: #2f9e6b;
+  }
+
+  :root[data-theme='dark'][data-accent='orange'],
+  :root[data-theme='dark'] .accent-swatch[data-accent='orange'] {
+    --accent: #dd7f26;
+  }
+
+  :root[data-theme='dark'][data-accent='pink'],
+  :root[data-theme='dark'] .accent-swatch[data-accent='pink'] {
+    --accent: #e0558f;
+  }
+
+  :root[data-theme='dark'][data-accent='graphite'],
+  :root[data-theme='dark'] .accent-swatch[data-accent='graphite'] {
+    --accent: #e3e3e3;
+    --accent-text: #191919;
+  }
+}
+
+/* Accent colours, for links, checkboxes, toggles, focus rings and selection. */
+.accent-swatch[data-accent='blue'] {
   --accent: #2383e2;
-  --selection: rgba(35, 131, 226, 0.4);
-  --find-match: rgba(255, 212, 0, 0.24);
-  --find-current: rgba(255, 150, 0, 0.55);
-  --danger: #df5452;
-  --inline-code-bg: rgba(135, 131, 120, 0.25);
-  --inline-code-text: #ff7369;
-  --banner-bg: #3a3320;
-  --banner-text: #e9d9a8;
-  --banner-error-bg: #3f2120;
-  --banner-error-text: #f2b8b5;
+}
 
-  --callout-note: #1f2c33;
-  --callout-tip: #1f2c24;
-  --callout-important: #2a2433;
-  --callout-warning: #33291a;
-  --callout-caution: #352021;
+:root[data-accent='purple'],
+.accent-swatch[data-accent='purple'] {
+  --accent: #7c5ce6;
+}
 
-  --shadow-menu: 0 0 0 1px rgba(255, 255, 255, 0.08), 0 3px 6px rgba(0, 0, 0, 0.3),
-    0 9px 24px rgba(0, 0, 0, 0.5);
+:root[data-accent='green'],
+.accent-swatch[data-accent='green'] {
+  --accent: #2b9a66;
+}
 
-  --hl-keyword: #ff7b72;
-  --hl-string: #7ee787;
-  --hl-number: #79c0ff;
-  --hl-comment: #8b949e;
-  --hl-title: #d2a8ff;
-  --hl-attr: #ffa657;
+:root[data-accent='orange'],
+.accent-swatch[data-accent='orange'] {
+  --accent: #d9730d;
+}
+
+:root[data-accent='pink'],
+.accent-swatch[data-accent='pink'] {
+  --accent: #d4447f;
+}
+
+:root[data-accent='graphite'],
+.accent-swatch[data-accent='graphite'] {
+  --accent: #37352f;
+  --accent-text: #ffffff;
 }

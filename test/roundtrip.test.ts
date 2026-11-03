@@ -428,3 +428,64 @@ describe('Markdown structure', () => {
     expect(parseMarkup('one\ntwo', 'md').doc.textContent).toBe('one two')
   })
 })
+
+describe('highlights', () => {
+  const marksIn = (text: string, flavor: Flavor = 'md') => {
+    const found: Array<[string, string | null]> = []
+    parseMarkup(text, flavor).doc.descendants((node) => {
+      if (!node.isText) return
+      const highlight = node.marks.find((mark) => mark.type.name === 'highlight')
+      found.push([node.text ?? '', highlight ? highlight.attrs.color : null])
+    })
+    return found
+  }
+  const highlighted = (text: string, color: string) =>
+    schema.node('paragraph', null, [schema.text(text, [schema.mark('highlight', { color })])])
+
+  it('reads ==text== and <mark> as yellow', () => {
+    expect(marksIn('a ==b== c')).toEqual([['a ', null], ['b', 'yellow'], [' c', null]])
+    expect(marksIn('a <mark>b</mark> c')).toEqual([['a ', null], ['b', 'yellow'], [' c', null]])
+  })
+
+  it('reads the colours the highlighter writes', () => {
+    expect(marksIn('<mark style="background: #ccf0d1">b</mark>')).toEqual([['b', 'green']])
+    expect(marksIn("<mark style='background-color:#D3E5FF;'>b</mark>")).toEqual([['b', 'blue']])
+  })
+
+  it('leaves a <mark> it cannot show as raw HTML', () => {
+    const paragraph = parseMarkup('<mark class="x">b</mark> and <mark>open', 'md').doc.child(0)
+    const kinds: string[] = []
+    paragraph.forEach((node) => kinds.push(node.type.name))
+    expect(kinds).toEqual(['rawInline', 'text', 'rawInline', 'text', 'rawInline', 'text'])
+  })
+
+  it('writes yellow as ==text== and other colours as <mark>', () => {
+    expect(serializeBlock(highlighted('b', 'yellow'), 'md')).toBe('==b==')
+    expect(serializeBlock(highlighted('b', 'pink'), 'md')).toBe('<mark style="background: #ffd6e8">b</mark>')
+    for (const color of ['yellow', 'green', 'blue', 'pink', 'purple']) {
+      const node = highlighted('some words', color)
+      expect(parseMarkup(serializeBlock(node, 'md'), 'md').doc.child(0).toJSON()).toEqual(node.toJSON())
+    }
+  })
+
+  it('keeps inline code inside a highlight', () => {
+    const node = schema.node('paragraph', null, [
+      schema.text('x', [schema.mark('highlight', { color: 'yellow' }), schema.mark('code')])
+    ])
+    expect(serializeBlock(node, 'md')).toBe('==`x`==')
+  })
+
+  it('escapes typed == only when it would turn into a highlight', () => {
+    const paragraph = (text: string) => schema.node('paragraph', null, [schema.text(text)])
+    expect(serializeBlock(paragraph('if a == b'), 'md')).toBe('if a == b')
+    for (const text of ['x==y==z', '==not marked==', 'a ===b=== c']) {
+      const written = serializeBlock(paragraph(text), 'md')
+      expect(parseMarkup(written, 'md').doc.child(0).toJSON()).toEqual(paragraph(text).toJSON())
+    }
+  })
+
+  it('has no highlights in a .txt file', () => {
+    expect(marksIn('a ==b== <mark>c</mark>', 'txt')).toEqual([['a ==b== <mark>c</mark>', null]])
+    expect(serializeBlock(highlighted('b', 'green'), 'txt')).toBe('b')
+  })
+})

@@ -118,7 +118,15 @@ export interface NotaboekApi {
   saveImage(dir: string, name: string, bytes: Uint8Array): Promise<string>
   reveal(path: string): void
   openExternal(url: string): void
-  setTheme(theme: 'light' | 'dark'): void
+  // Prints the page showing. Cancelling the print dialog isn't an error.
+  printPage(): Promise<void>
+  // Asks where to save, then writes the page showing as a PDF. Resolves to the
+  // file written, or null if there isn't one, as when the dialog is cancelled.
+  exportPdf(name: string, dir: string): Promise<string | null>
+  // The PDF just exported may be outside the open folder, so it has its own way out.
+  showExportedPdf(how: 'open' | 'reveal'): void
+  // `background` is the page's colour, for the window's frame and buttons.
+  setTheme(theme: 'light' | 'dark', background: string): void
   toggleFullScreen(): void
   zoom(direction: 'in' | 'out' | 'reset'): void
   // Must arrive before the right-click menu is built, so it blocks.

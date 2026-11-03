@@ -39,7 +39,9 @@ export const MARKDOWN: Record<string, string> = {
   listThenCode: '- item\n\n  ```js\n  code()\n  ```\n\n- next\n',
   duplicates: 'same\n\nsame\n\nsame\n',
   trailingSpaces: 'line with trailing   \n\n   indented para\n',
-  unicode: '# 日本語のタイトル\n\nCafé — naïve 🎉\n'
+  unicode: '# 日本語のタイトル\n\nCafé — naïve 🎉\n',
+  highlights:
+    'Some ==marked== and <mark style="background: #d3e5ff">blue **bold**</mark> text.\n\nPlain a == b and <mark>html</mark>.\n'
 }
 
 export const TEXT: Record<string, string> = {

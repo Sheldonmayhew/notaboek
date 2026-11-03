@@ -94,7 +94,8 @@ const PlainTextKeys = Extension.create({
       'Mod-i': ignore,
       'Mod-e': ignore,
       'Mod-Shift-s': ignore,
-      'Mod-Shift-x': ignore
+      'Mod-Shift-x': ignore,
+      'Mod-Shift-h': ignore
     }
   }
 })

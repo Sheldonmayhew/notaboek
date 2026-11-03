@@ -75,6 +75,7 @@ export function App() {
   const [treeVersion, setTreeVersion] = useState(0)
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
   const [searchRequest, setSearchRequest] = useState(0)
+  const [exported, setExported] = useState<string | null>(null)
 
   // Work that finishes after a render needs the latest tabs, not the ones it
   // started with, so these hold the truth and the state above only draws it.
@@ -658,6 +659,40 @@ export function App() {
     return text.trim() ? text.trim().split(/\s+/).length : 0
   }, [activeTab])
 
+  // The printout and the PDF are titled with the page's name, not the app's.
+  const printing = useCallback(
+    async <T,>(run: (path: string) => Promise<T>): Promise<T | null> => {
+      const path = activeTab()?.page ? activeTab()?.path : null
+      if (!path) return null
+      const title = document.title
+      document.title = stripExtension(baseName(path))
+      // Gives the menu that asked for this a moment to close first.
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+      try {
+        return await run(path)
+      } catch (error) {
+        setErrorText(friendlyError(error))
+        return null
+      } finally {
+        document.title = title
+      }
+    },
+    [activeTab]
+  )
+
+  const printPage = useCallback(() => void printing(() => api.printPage()), [printing])
+
+  const exportPdf = useCallback(async () => {
+    const file = await printing((path) => api.exportPdf(stripExtension(baseName(path)), dirName(path)))
+    if (file) setExported(file)
+  }, [printing])
+
+  useEffect(() => {
+    if (!exported) return
+    const timer = setTimeout(() => setExported(null), 12000)
+    return () => clearTimeout(timer)
+  }, [exported])
+
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'F11' && api.capabilities.windowKeys) {
@@ -685,6 +720,7 @@ export function App() {
       else if (key === '/') run(() => void toggleSource())
       else if (key === 'f' && event.shiftKey) run(openSearch)
       else if (key === 'f' && view) run(view.openFind)
+      else if (key === 'p' && !event.shiftKey && activeTab()?.page) run(printPage)
       // A browser keeps the rest of these for its own tabs and windows.
       else if (!api.capabilities.windowKeys) return
       else if (key === 't' && !event.repeat) run(event.shiftKey ? reopenTab : addBlankTab)
@@ -721,7 +757,8 @@ export function App() {
     reopenTab,
     closeTab,
     stepTab,
-    showTab
+    showTab,
+    printPage
   ])
 
   if (!ready) return null
@@ -825,6 +862,8 @@ export function App() {
           onToggleSource={() => void toggleSource()}
           onFind={() => active?.live.view.current?.openFind()}
           onReveal={() => shownPath && api.reveal(shownPath)}
+          onExportPdf={() => void exportPdf()}
+          onPrint={printPage}
           countWords={countWords}
         />
 
@@ -882,6 +921,20 @@ export function App() {
                 if (active) patchTab(active.id, { saveError: null })
               }}
             >
+              Dismiss
+            </button>
+          </div>
+        )}
+        {exported && (
+          <div className="banner banner-notice" role="status">
+            <span>Exported {baseName(exported)}</span>
+            <button type="button" onClick={() => api.showExportedPdf('open')}>
+              Open
+            </button>
+            <button type="button" onClick={() => api.showExportedPdf('reveal')}>
+              Show in File Explorer
+            </button>
+            <button type="button" onClick={() => setExported(null)}>
               Dismiss
             </button>
           </div>

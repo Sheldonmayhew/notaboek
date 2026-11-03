@@ -355,6 +355,13 @@ const api: NotaboekApi = {
 
   reveal: () => undefined,
   openExternal: (url) => void window.open(url, '_blank', 'noopener'),
+  printPage: async () => window.print(),
+  // A browser saves a PDF from its own print dialog, under the page's title.
+  exportPdf: async () => {
+    window.print()
+    return null
+  },
+  showExportedPdf: () => undefined,
   setTheme: () => undefined,
   toggleFullScreen: () => undefined,
   zoom: () => undefined,

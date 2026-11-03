@@ -1,11 +1,13 @@
 import {
   Code2,
+  FileDown,
   FolderSearch,
   Maximize2,
   Menu as MenuIcon,
   Monitor,
   Moon,
   MoreHorizontal,
+  Printer,
   Search,
   Sun,
   Type
@@ -13,7 +15,7 @@ import {
 import { useRef, useState } from 'react'
 import type { SaveStatus } from '../doc/saveSession'
 import { api, baseName, relativeTo, stripExtension } from '../platform'
-import type { FontChoice, Prefs, ThemeChoice } from '../prefs'
+import { ACCENTS, PAPERS, type FontChoice, type Prefs, type ThemeChoice } from '../prefs'
 import { Popover } from './Popover'
 
 const STATUS_LABEL: Record<SaveStatus, string> = {
@@ -49,6 +51,8 @@ interface TopbarProps {
   onToggleSource: () => void
   onFind: () => void
   onReveal: () => void
+  onExportPdf: () => void
+  onPrint: () => void
   countWords: () => number
 }
 
@@ -186,6 +190,30 @@ export function Topbar(props: TopbarProps) {
             </button>
           )}
           <div className="menu-separator" />
+          <button
+            type="button"
+            className="menu-item"
+            onClick={() => {
+              setMenuOpen(false)
+              props.onExportPdf()
+            }}
+          >
+            <FileDown size={18} strokeWidth={1.75} />
+            <span className="menu-item-title">Export to PDF</span>
+          </button>
+          <button
+            type="button"
+            className="menu-item"
+            onClick={() => {
+              setMenuOpen(false)
+              props.onPrint()
+            }}
+          >
+            <Printer size={18} strokeWidth={1.75} />
+            <span className="menu-item-title">Print</span>
+            <span className="menu-item-hint">Ctrl+P</span>
+          </button>
+          <div className="menu-separator" />
           <div className="menu-label">Theme</div>
           <div className="theme-picker">
             {THEMES.map((theme) => {
@@ -202,6 +230,46 @@ export function Topbar(props: TopbarProps) {
                 </button>
               )
             })}
+          </div>
+          <div className="swatch-row">
+            <span className="swatch-label" id="accent-label">
+              Accent
+            </span>
+            <div className="swatches" role="radiogroup" aria-labelledby="accent-label">
+              {ACCENTS.map((accent) => (
+                <button
+                  key={accent.id}
+                  type="button"
+                  role="radio"
+                  className="accent-swatch"
+                  data-accent={accent.id}
+                  aria-checked={prefs.accent === accent.id}
+                  aria-label={accent.label}
+                  title={accent.label}
+                  onClick={() => onPrefs({ accent: accent.id })}
+                />
+              ))}
+            </div>
+          </div>
+          <div className="swatch-row">
+            <span className="swatch-label" id="paper-label">
+              Page
+            </span>
+            <div className="swatches" role="radiogroup" aria-labelledby="paper-label">
+              {PAPERS.map((paper) => (
+                <button
+                  key={paper.id}
+                  type="button"
+                  role="radio"
+                  className="paper-swatch"
+                  data-paper={paper.id}
+                  aria-checked={prefs.paper === paper.id}
+                  aria-label={`${paper.label} page`}
+                  title={paper.label}
+                  onClick={() => onPrefs({ paper: paper.id })}
+                />
+              ))}
+            </div>
           </div>
           <div className="menu-separator" />
           <div className="menu-footer">Word count: {words.toLocaleString()}</div>

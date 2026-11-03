@@ -1,5 +1,6 @@
 import MarkdownIt, { type StateCore, type StateInline, type Token } from 'markdown-it'
 import { CALLOUT_KINDS } from '../editor/Callout'
+import { DEFAULT_HIGHLIGHT, highlightOfHex, type HighlightColor } from '../editor/Highlight'
 
 export type Flavor = 'md' | 'txt'
 
@@ -168,6 +169,102 @@ function splitLongParagraphs(state: StateCore): void {
   state.tokens = tokens
 }
 
+const EQUALS = 0x3d
+
+// ==text== is a highlight, read the way markdown-it reads ~~strikethrough~~.
+function highlightTokenize(state: StateInline, silent: boolean): boolean {
+  if (silent || state.src.charCodeAt(state.pos) !== EQUALS) return false
+  const scanned = state.scanDelims(state.pos, true)
+  let length = scanned.length
+  if (length < 2) return false
+  if (length % 2) {
+    state.push('text', '', 0).content = '='
+    length--
+  }
+  for (let i = 0; i < length; i += 2) {
+    state.push('text', '', 0).content = '=='
+    state.delimiters.push({
+      marker: EQUALS,
+      length: 0,
+      token: state.tokens.length - 1,
+      end: -1,
+      open: scanned.can_open,
+      close: scanned.can_close
+    })
+  }
+  state.pos += scanned.length
+  return true
+}
+
+const markToken = (token: Token, nesting: 1 | -1) =>
+  Object.assign(token, {
+    type: nesting === 1 ? 'highlight_open' : 'highlight_close',
+    tag: 'mark',
+    nesting,
+    markup: '==',
+    content: ''
+  })
+
+function pairHighlights(state: StateInline, delimiters: StateInline['delimiters']): void {
+  const loneMarkers: number[] = []
+  for (const start of delimiters) {
+    if (start.marker !== EQUALS || start.end === -1) continue
+    const end = delimiters[start.end]
+    markToken(state.tokens[start.token], 1)
+    markToken(state.tokens[end.token], -1)
+    const before = state.tokens[end.token - 1]
+    if (before.type === 'text' && before.content === '=') loneMarkers.push(end.token - 1)
+  }
+  // An odd run like === leaves one = in front, which belongs after the close.
+  while (loneMarkers.length) {
+    const lone = loneMarkers.pop() as number
+    let last = lone + 1
+    while (last < state.tokens.length && state.tokens[last].type === 'highlight_close') last++
+    last--
+    if (lone !== last) [state.tokens[lone], state.tokens[last]] = [state.tokens[last], state.tokens[lone]]
+  }
+}
+
+function highlightPostProcess(state: StateInline): void {
+  pairHighlights(state, state.delimiters)
+  for (const meta of state.tokens_meta) {
+    if (meta?.delimiters) pairHighlights(state, meta.delimiters)
+  }
+}
+
+const MARK_TAG = /^<mark\b/i
+const MARK_CLOSE = /^<\/mark\s*>$/i
+const MARK_OPEN = /^<mark(?:\s+style\s*=\s*(["'])\s*background(?:-color)?\s*:\s*(#[0-9a-f]{6})\s*;?\s*\1)?\s*>$/i
+
+// The colour a <mark> tag stands for, if it's one the highlighter can show.
+function markColor(tag: string): HighlightColor | null {
+  const match = MARK_OPEN.exec(tag)
+  if (!match) return null
+  return match[2] ? highlightOfHex(match[2]) : DEFAULT_HIGHLIGHT
+}
+
+// <mark> is how HTML highlights, and how the highlighter writes colours other
+// than yellow. A tag it can't show, or one inside another, stays raw HTML.
+function htmlHighlights(state: StateCore): void {
+  for (const token of state.tokens) {
+    if (token.type !== 'inline' || !token.children) continue
+    const open: Array<{ tag: Token; color: HighlightColor | null; outermost: boolean }> = []
+    for (const child of token.children) {
+      if (child.type !== 'html_inline') continue
+      if (MARK_TAG.test(child.content)) {
+        open.push({ tag: child, color: markColor(child.content), outermost: open.length === 0 })
+        continue
+      }
+      if (!MARK_CLOSE.test(child.content)) continue
+      const opened = open.pop()
+      if (!opened?.color || !opened.outermost) continue
+      opened.tag.type = 'highlight_open'
+      opened.tag.meta = { color: opened.color }
+      child.type = 'highlight_close'
+    }
+  }
+}
+
 function literalNewline(state: StateInline, silent: boolean): boolean {
   if (state.src.charCodeAt(state.pos) !== 0x0a) return false
   if (!silent) {
@@ -191,6 +288,11 @@ export function createTokenizer(flavor: Flavor) {
     md.core.ruler.after('block', 'notaboek_indentation', keepIndentation)
     md.core.ruler.after('notaboek_indentation', 'notaboek_long_paragraphs', splitLongParagraphs)
     md.inline.ruler.at('newline', literalNewline)
+  } else {
+    // Plain text has no highlights, and `a == b` is just what it says.
+    md.inline.ruler.before('emphasis', 'notaboek_highlight', highlightTokenize)
+    md.inline.ruler2.before('emphasis', 'notaboek_highlight', highlightPostProcess)
+    md.core.ruler.after('inline', 'notaboek_html_highlights', htmlHighlights)
   }
 
   md.core.ruler.after('block', 'notaboek_blocks', blockRule)

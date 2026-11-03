@@ -53,7 +53,7 @@ function withoutFormatting(fragment: Fragment): Fragment {
 const LARGE_PAGE = 256 * 1024
 
 const MARKDOWN_BLOCK = /^(#{1,6} |[-*+] |\d+[.)] |> |```|---$|\|.*\|$)/m
-const MARKDOWN_INLINE = /\*\*[^*]+\*\*|`[^`]+`|\[[^\]]+\]\([^)]+\)/
+const MARKDOWN_INLINE = /\*\*[^*]+\*\*|==[^=\s][^=]*==|`[^`]+`|\[[^\]]+\]\([^)]+\)/
 
 export function PageEditor(props: PageEditorProps) {
   const { loaded, scroller, autoFocus, active, assetDir, onChange, onReady, onOpenLink, onImageError } = props
