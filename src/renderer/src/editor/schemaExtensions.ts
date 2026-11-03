@@ -9,6 +9,7 @@ import { TaskList } from '@tiptap/extension-task-list'
 import { common, createLowlight } from 'lowlight'
 import { resolveAssetUrl } from './assets'
 import { Callout } from './Callout'
+import { Highlight } from './Highlight'
 import { RawBlock, RawInline } from './RawHtml'
 
 const lowlight = createLowlight(common)
@@ -139,13 +140,15 @@ export const schemaExtensions = [
     code: false,
     codeBlock: false,
     underline: false, // no Markdown equivalent
-    dropcursor: { color: '#2383e2', width: 3 },
+    dropcursor: { color: 'var(--accent)', width: 3 },
     link: {
       openOnClick: false,
       autolink: true,
       HTMLAttributes: { target: null, rel: null, class: null }
     }
   }),
+  // Before code, which Markdown needs innermost: ==`code`== and not `==code==`.
+  Highlight,
   CombinableCode,
   LabelledCodeBlock.configure({ lowlight, enableTabIndentation: true, tabSize: 2 }),
   TaskList,

@@ -2,6 +2,7 @@ import type { Node as PMNode } from '@tiptap/pm/model'
 import type { Token } from 'markdown-it'
 import { MarkdownParser, MarkdownSerializer, defaultMarkdownSerializer } from 'prosemirror-markdown'
 import type { MarkdownSerializerState } from 'prosemirror-markdown'
+import { DEFAULT_HIGHLIGHT, highlightHex } from '../editor/Highlight'
 import { schema } from './schema'
 import { createTokenizer, type Flavor } from './tokenizer'
 
@@ -59,6 +60,7 @@ const parserTokens = {
   em: { mark: 'italic' },
   strong: { mark: 'bold' },
   s: { mark: 'strike' },
+  highlight: { mark: 'highlight', getAttrs: (token: Token) => ({ color: token.meta?.color ?? DEFAULT_HIGHLIGHT }) },
   link: {
     mark: 'link',
     getAttrs: (token: Token) => ({
@@ -269,6 +271,13 @@ function createSerializer({ escape, literalBreaks }: SerializerOptions): Markdow
       italic: literalBreaks ? noMark : { open: '*', close: '*', mixable: true, expelEnclosingWhitespace: true },
       bold: literalBreaks ? noMark : { open: '**', close: '**', mixable: true, expelEnclosingWhitespace: true },
       strike: literalBreaks ? noMark : { open: '~~', close: '~~', mixable: true, expelEnclosingWhitespace: true },
+      highlight: literalBreaks ? noMark : {
+        open: (_state, mark) =>
+          mark.attrs.color === DEFAULT_HIGHLIGHT ? '==' : `<mark style="background: ${highlightHex(mark.attrs.color)}">`,
+        close: (_state, mark) => (mark.attrs.color === DEFAULT_HIGHLIGHT ? '==' : '</mark>'),
+        mixable: true,
+        expelEnclosingWhitespace: true
+      },
       code: literalBreaks ? noMark : defaultMarkdownSerializer.marks.code,
       // A .txt file holds only its text, so a link is written as just that.
       link: literalBreaks ? noMark : {
@@ -288,7 +297,8 @@ function createSerializer({ escape, literalBreaks }: SerializerOptions): Markdow
         mixable: true
       }
     },
-    { hardBreakNodeName: 'hardBreak', strict: false, escapeExtraCharacters: escape ? /[&<]/g : undefined }
+    // `==` would read back as a highlight, so the first of each pair is escaped.
+    { hardBreakNodeName: 'hardBreak', strict: false, escapeExtraCharacters: escape ? /[&<]|=(?==)/g : undefined }
   )
   return serializer
 }

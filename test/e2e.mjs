@@ -330,6 +330,101 @@ try {
     await page.keyboard.press('Escape')
   })
 
+  const marked = path.join(workspace, 'Marked.md')
+
+  await check('the highlighter colours a selection and saves it', async () => {
+    await makePage(marked, '# Marked\n\nAlready ==yellow== here.\n\nPick a colour for this line.\n\nIf a == b then\n')
+    await openInTree('Marked')
+    await editor.locator('mark[data-color="yellow"]').waitFor()
+    await editor.locator('p', { hasText: 'Pick a colour' }).click()
+    await page.keyboard.press('Home')
+    await page.keyboard.press('Shift+End')
+    await page.locator('.toolbar [aria-label="Highlight colour"]').click()
+    await page.locator('.highlight-swatch[data-color="green"]').click()
+    await saved()
+    let text = await waitForFile(marked, (t) => t.includes('<mark'))
+    assert.ok(text.includes('<mark style="background: #ccf0d1">Pick a colour for this line.</mark>'), text)
+    await shot('14-highlights')
+
+    // A typed `==` only closes a highlight when it reads as one in Markdown.
+    await editor.locator('p', { hasText: 'If a == b then' }).click()
+    await page.keyboard.press('End')
+    await page.keyboard.type(' ==this== too')
+    await saved()
+    text = await waitForFile(marked, (t) => t.includes('==this=='))
+    assert.ok(text.includes('If a == b then ==this== too'), text)
+    assert.ok(text.includes('Already ==yellow== here.'))
+  })
+
+  await check('accent and page colours restyle the window', async () => {
+    await page.locator('[aria-label="Page options"]').click()
+    await page.locator('.accent-swatch[data-accent="green"]').click()
+    await page.locator('.paper-swatch[data-paper="sepia"]').click()
+    await wait(100)
+    await shot('15-options-sepia')
+    const style = await page.evaluate(() => {
+      const root = getComputedStyle(document.documentElement)
+      return [root.getPropertyValue('--accent').trim(), root.getPropertyValue('--bg').trim()]
+    })
+    assert.deepEqual(style, ['#2b9a66', '#f6efe0'])
+    const frame = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getBackgroundColor())
+    assert.equal(frame.toLowerCase(), '#f6efe0')
+    await page.locator('.accent-swatch[data-accent="blue"]').click()
+    await page.locator('.paper-swatch[data-paper="default"]').click()
+    await page.keyboard.press('Escape')
+  })
+
+  await check('printing shows only the page, on white', async () => {
+    await page.locator('[aria-label="Page options"]').click()
+    await page.locator('.theme-option', { hasText: 'Dark' }).click()
+    await page.keyboard.press('Escape')
+    await page.emulateMedia({ media: 'print' })
+    const printed = await page.evaluate(() => ({
+      topbar: getComputedStyle(document.querySelector('.topbar')).display,
+      background: getComputedStyle(document.body).backgroundColor,
+      mark: getComputedStyle(document.querySelector('.tab-view:not([hidden]) mark')).backgroundColor
+    }))
+    await shot('16-print')
+    await page.emulateMedia({ media: null })
+    assert.deepEqual(printed, { topbar: 'none', background: 'rgb(255, 255, 255)', mark: 'rgb(255, 241, 168)' })
+
+    await app.evaluate(({ BrowserWindow }) => {
+      const contents = BrowserWindow.getAllWindows()[0].webContents
+      contents.print = (options, done) => {
+        globalThis.printOptions = options
+        done(false, 'Print job canceled')
+      }
+    })
+    await editor.locator('h1').first().click()
+    await page.keyboard.press('Control+p')
+    await wait(300)
+    assert.deepEqual(await app.evaluate(() => globalThis.printOptions), { printBackground: true })
+    assert.equal(await page.locator('.banner-error').count(), 0, 'cancelling is not an error')
+  })
+
+  await check('export to PDF writes the page beside it', async () => {
+    const pdf = path.join(sandbox, 'Marked.pdf')
+    await app.evaluate(({ dialog }, file) => {
+      dialog.showSaveDialog = async (_window, options) => {
+        globalThis.suggestedPdf = options.defaultPath
+        return { canceled: false, filePath: file }
+      }
+    }, pdf)
+    await page.locator('[aria-label="Page options"]').click()
+    await page.locator('.menu-item', { hasText: 'Export to PDF' }).click()
+    await page.locator('.banner-notice').waitFor({ timeout: 15000 })
+    assert.equal(await app.evaluate(() => globalThis.suggestedPdf), path.join(workspace, 'Marked.pdf'))
+    assert.equal((await readFile(pdf)).subarray(0, 5).toString(), '%PDF-')
+    assert.equal(await page.evaluate(() => document.title), 'Marked - Notaboek')
+    // The window goes back to the theme's colour once the paper is done.
+    const frame = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getBackgroundColor())
+    assert.equal(frame.toLowerCase(), '#191919')
+    await page.locator('.banner-notice button', { hasText: 'Dismiss' }).click()
+    await page.locator('[aria-label="Page options"]').click()
+    await page.locator('.theme-option', { hasText: 'Light' }).click()
+    await page.keyboard.press('Escape')
+  })
+
   await check('source view edits the file directly', async () => {
     await openInTree('Monday notes')
     await page.locator('.tab-view:not([hidden]) .page-title').waitFor()

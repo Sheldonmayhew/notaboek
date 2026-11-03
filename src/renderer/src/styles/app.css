@@ -853,6 +853,11 @@ mark.find-match {
   color: var(--banner-error-text);
 }
 
+.banner-notice {
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg));
+  color: var(--text);
+}
+
 /* Empty and welcome screens */
 
 .empty-state {
@@ -1119,6 +1124,7 @@ mark.find-match {
 }
 
 .options-menu {
+  max-height: calc(100vh - 16px);
   width: 264px;
 }
 
@@ -1189,6 +1195,58 @@ mark.find-match {
 .theme-option[data-active='true'] {
   background: var(--active);
   color: var(--text);
+}
+
+.swatch-row {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  padding: 5px 9px;
+}
+
+.swatch-label {
+  color: var(--text-2);
+  flex: none;
+  font-size: 13px;
+  width: 50px;
+}
+
+.swatches {
+  display: flex;
+  flex: 1;
+  justify-content: space-between;
+}
+
+.accent-swatch,
+.paper-swatch {
+  border-radius: 50%;
+  flex: none;
+  height: 20px;
+  transition: transform 80ms ease;
+  width: 20px;
+}
+
+.accent-swatch:hover,
+.paper-swatch:hover {
+  transform: scale(1.1);
+}
+
+.accent-swatch {
+  background: var(--accent);
+}
+
+.paper-swatch {
+  background: var(--bg);
+  border-radius: 6px;
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+}
+
+.accent-swatch[aria-checked='true'] {
+  box-shadow: 0 0 0 2px var(--bg-menu), 0 0 0 3.5px var(--text-2);
+}
+
+.paper-swatch[aria-checked='true'] {
+  box-shadow: inset 0 0 0 1px var(--border-strong), 0 0 0 2px var(--bg-menu), 0 0 0 3.5px var(--text-2);
 }
 
 .toggle {

@@ -26,9 +26,12 @@ The installer lands in `dist/`. It asks where new pages should go, with **Browse
 - **Blocks:** headings, bulleted, numbered and to-do lists, quotes, callouts, code with syntax highlighting, dividers, tables and images
 - **Slash menu:** press `/` for every block type, and type to filter
 - **Block handles:** hover to drag a block, turn it into another type, duplicate it or delete it
-- **Selection toolbar:** bold, italic, strikethrough, inline code and links
+- **Selection toolbar:** bold, italic, strikethrough, highlight, inline code and links
+- **Highlighter:** select text and click the highlighter, or press `Ctrl+Shift+H`, to mark it in the last colour you used. The arrow beside it picks yellow, green, blue, pink or purple, or removes the highlight. Typing `==text==` highlights in yellow too
 - **Markdown shortcuts as you type:** `#`, `-`, `1.`, `[]`, `>`, ` ``` ` and `---`
 - **Page styles:** default, serif and mono fonts, small text, full width, and light, dark or system themes
+- **Theme colours:** in the page's **…** menu, pick an accent colour (blue, purple, green, orange, pink or graphite) for links, checkboxes, toggles and selection, and a page colour (plain, paper, sepia, mist, sage or blush). Each has a light and a dark version, and the window's title bar follows the page
+- **Print and export to PDF:** both are in the page's **…** menu, and `Ctrl+P` prints. Only the page goes on paper, on white whatever the theme, with highlights, code and callouts in colour and long code lines wrapped. A PDF is saved beside the page by default, on A4, or on Letter where that's the usual paper size
 - **Fits any window:** text and the page grow with the space available, and in a small window the sidebar steps aside until you ask for it
 - **Frontmatter as properties:** YAML at the top of a file shows as read-only rows under the title
 - **Source view:** `Ctrl+/` shows and edits the raw file
@@ -56,6 +59,8 @@ The installer lands in `dist/`. It asks where new pages should go, with **Browse
 | `Ctrl+=`, `Ctrl+-`, `Ctrl+0` | Zoom in, zoom out, reset zoom |
 | `F11` | Full screen |
 | `Ctrl+/` | Switch between page and source view |
+| `Ctrl+Shift+H` | Highlight the selection, or remove its highlight |
+| `Ctrl+P` | Print the page |
 | `Ctrl+Click` | Follow a link, or add a sidebar row to the selection |
 | `Shift+Click` | Select a range of sidebar rows |
 | `Delete` | With the sidebar focused, move the selection to the Recycle Bin |
@@ -104,11 +109,17 @@ Notaboek treats the file on disk as the source of truth.
 - **Unsaved text is never dropped quietly.** If a save fails, or a conflict is unresolved, Notaboek won't switch pages, and closing the window asks first.
 - **Deleting goes to the Recycle Bin.**
 
+## How highlights are saved
+
+A yellow highlight is written as `==text==`, the Markdown highlight that Obsidian, Typora and many other apps read. Other colours are written as `<mark style="background: #ccf0d1">text</mark>`, which keeps the colour in any app that shows HTML in Markdown. Notaboek also reads `<mark>text</mark>` as a yellow highlight. A `<mark>` it doesn't recognise, such as one with another colour, stays as raw HTML and is saved exactly as written.
+
+Typed `==` that isn't meant as a highlight, such as `a == b`, is left alone, and is escaped as `\==` only where it would otherwise read as one.
+
 ## How `.txt` files work
 
 A `.txt` file is read as text with light structure: `#` headings, `-` lists, `[ ]` to-dos, `>` quotes and `---` dividers all become blocks, and web addresses become links. Line breaks and indentation stay where you put them, and nothing is ever escaped.
 
-Everything else stays exactly as written. `__init__.py`, `2*3*4` and `**stars**` are shown and saved literally, because plain text has no way to store formatting. That's why the toolbar has no bold or italic in a `.txt` file. Use a `.md` file when you want formatting.
+Everything else stays exactly as written. `__init__.py`, `2*3*4` and `**stars**` are shown and saved literally, because plain text has no way to store formatting. That's why the toolbar has no bold, italic or highlighter in a `.txt` file. Use a `.md` file when you want formatting.
 
 ## Known limits
 
@@ -122,6 +133,8 @@ Everything else stays exactly as written. `__init__.py`, `2*3*4` and `**stars**`
 - A long `.txt` paragraph is shown in pieces of 200 lines, so copying across two pieces adds a blank line. The file itself is unaffected.
 - A file that's one enormous line, with no line breaks at all, stays slow, because a browser has to lay a line out whole.
 - Underline isn't offered, because Markdown has no way to store it.
+- Theme colours are chosen from the presets; there's no custom colour picker yet.
+- In the web version, **Export to PDF** opens the browser's print dialog, where you choose **Save as PDF**.
 - Empty paragraphs aren't kept on save, because Markdown has no empty block.
 - A list can't mix to-do items with plain bullets. Such a list displays as a normal bulleted list with its `[ ]` shown as text.
 - Blocks are moved and duplicated with the mouse; the block handle has no keyboard route yet.

@@ -1,10 +1,32 @@
 import type { Editor } from '@tiptap/core'
 import { useEditorState } from '@tiptap/react'
 import { BubbleMenu } from '@tiptap/react/menus'
-import { Bold, Check, ChevronDown, Code, Italic, Link2, Strikethrough, X, type LucideIcon } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
+import {
+  Bold,
+  Check,
+  ChevronDown,
+  Code,
+  Eraser,
+  Highlighter,
+  Italic,
+  Link2,
+  Strikethrough,
+  X,
+  type LucideIcon
+} from 'lucide-react'
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type FormEvent } from 'react'
 import { Popover } from '../components/Popover'
 import { CONVERTIBLE_BLOCKS, activeBlockTitle, convertSelection } from './blockTypes'
+import {
+  HIGHLIGHTS,
+  chooseHighlighter,
+  highlighterColor,
+  removeHighlight,
+  setHighlight,
+  subscribeHighlighter,
+  toggleHighlight,
+  type HighlightColor
+} from './Highlight'
 
 interface MarkButtonProps {
   icon: LucideIcon
@@ -30,6 +52,88 @@ function MarkButton({ icon: Icon, label, active, onClick }: MarkButtonProps) {
   )
 }
 
+interface HighlighterProps {
+  editor: Editor
+  // The colour of the highlight under the selection, if there is one.
+  active: string | null
+}
+
+// One click highlights in the last colour used. The arrow beside it picks another.
+function HighlighterButton({ editor, active }: HighlighterProps) {
+  const color = useSyncExternalStore(subscribeHighlighter, highlighterColor)
+  const [open, setOpen] = useState(false)
+  const more = useRef<HTMLButtonElement>(null)
+
+  const pick = (next: HighlightColor) => {
+    chooseHighlighter(next)
+    setHighlight(editor, next)
+    setOpen(false)
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        className="toolbar-button toolbar-highlighter"
+        data-active={active !== null}
+        title="Highlight (Ctrl+Shift+H)"
+        aria-label="Highlight"
+        aria-pressed={active === color}
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={() => toggleHighlight(editor, color)}
+      >
+        <Highlighter size={16} strokeWidth={2.25} />
+        <span className="highlighter-ink" data-color={color} />
+      </button>
+      <button
+        ref={more}
+        type="button"
+        className="toolbar-button toolbar-more"
+        title="Highlight colour"
+        aria-label="Highlight colour"
+        aria-expanded={open}
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={() => setOpen((shown) => !shown)}
+      >
+        <ChevronDown size={13} strokeWidth={2.25} />
+      </button>
+      {open && more.current && (
+        <Popover anchor={more.current} takeFocus={false} className="highlight-menu" onClose={() => setOpen(false)}>
+          <div className="menu-label">Highlight</div>
+          <div className="highlight-swatches">
+            {HIGHLIGHTS.map((highlight) => (
+              <button
+                key={highlight.id}
+                type="button"
+                className="highlight-swatch"
+                data-color={highlight.id}
+                data-active={active === highlight.id}
+                title={highlight.label}
+                aria-label={`${highlight.label} highlight`}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => pick(highlight.id)}
+              />
+            ))}
+          </div>
+          <button
+            type="button"
+            className="menu-item"
+            disabled={active === null}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => {
+              removeHighlight(editor)
+              setOpen(false)
+            }}
+          >
+            <Eraser size={18} strokeWidth={1.75} />
+            <span className="menu-item-title">Remove highlight</span>
+          </button>
+        </Popover>
+      )}
+    </>
+  )
+}
+
 interface BubbleToolbarProps {
   editor: Editor
   // A .txt file can't hold bold, links and so on, so only blocks are offered.
@@ -51,6 +155,7 @@ export function BubbleToolbar({ editor, plainText }: BubbleToolbarProps) {
       italic: current.isActive('italic'),
       strike: current.isActive('strike'),
       code: current.isActive('code'),
+      highlight: current.isActive('highlight') ? (current.getAttributes('highlight').color as string) : null,
       link: current.isActive('link'),
       inTable: current.isActive('tableCell') || current.isActive('tableHeader'),
       block: activeBlockTitle(current)
@@ -187,6 +292,7 @@ export function BubbleToolbar({ editor, plainText }: BubbleToolbarProps) {
                 active={state.strike}
                 onClick={() => editor.chain().focus().toggleStrike().run()}
               />
+              <HighlighterButton editor={editor} active={state.highlight} />
               <MarkButton
                 icon={Code}
                 label="Inline code (Ctrl+E)"

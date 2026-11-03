@@ -29,6 +29,10 @@ const OVERLAY_HEIGHT = 45
 const ZOOM_STEP = 0.5
 const MAX_ZOOM = 3
 const MAX_NAMES_LISTED = 8
+// Where paper is Letter rather than A4.
+const LETTER_COUNTRIES = new Set(['US', 'CA', 'MX', 'PH', 'CL', 'CO', 'VE', 'PR', 'GT', 'CR', 'DO', 'SV', 'PA'])
+const PDF_MARGINS = { top: 0.7, bottom: 0.7, left: 0.75, right: 0.75 }
+const HEX_COLOR = /^#[0-9a-f]{6}$/i
 const OVERLAY = {
   light: { color: '#ffffff', symbolColor: '#37352f', height: OVERLAY_HEIGHT },
   dark: { color: '#191919', symbolColor: '#d4d4d4', height: OVERLAY_HEIGHT }
@@ -51,6 +55,7 @@ let pendingFile: string | null = null
 let defaultFolder = ''
 let tableContext = false
 let latestSearch = 0
+let lastExport: string | null = null
 const cloudSync = new DesktopSync((status) => window?.webContents.send('sync:status', status))
 
 protocol.registerSchemesAsPrivileged([
@@ -177,6 +182,18 @@ function focusWindow(): void {
   if (!window) return
   if (window.isMinimized()) window.restore()
   window.focus()
+}
+
+// Chromium fills the paper's margins with the window's own colour, which follows
+// the theme, so the window is white for as long as it prints.
+async function onWhitePaper<T>(run: () => Promise<T>): Promise<T> {
+  const shown = window?.getBackgroundColor()
+  window?.setBackgroundColor('#ffffff')
+  try {
+    return await run()
+  } finally {
+    if (shown) window?.setBackgroundColor(shown)
+  }
 }
 
 function registerIpc(): void {
@@ -364,6 +381,46 @@ function registerIpc(): void {
   ipcMain.on('shell:external', (_event, url: string) => {
     if (/^(https?:|mailto:)/i.test(url)) void shell.openExternal(url)
   })
+  ipcMain.handle('page:print', () => {
+    const contents = window?.webContents
+    if (!contents) return
+    return onWhitePaper(
+      () =>
+        new Promise<void>((resolve, reject) => {
+          contents.print({ printBackground: true }, (success, reason) => {
+            if (success || /cancel/i.test(reason)) resolve()
+            else reject(new Error(`The page couldn't be printed. ${reason}.`))
+          })
+        })
+    )
+  })
+  ipcMain.handle('page:export-pdf', async (_event, name: string, dir: string) => {
+    const contents = window?.webContents
+    if (!contents) return null
+    const folder = settings.workspace && isInside(settings.workspace, path.resolve(dir)) ? dir : app.getPath('documents')
+    const title = name.replace(/[<>:"/\\|?*\x00-\x1f]/g, '').trim() || 'Untitled'
+    const result = await dialog.showSaveDialog(window!, {
+      title: 'Export to PDF',
+      defaultPath: path.join(folder, `${title}.pdf`),
+      filters: [{ name: 'PDF', extensions: ['pdf'] }]
+    })
+    if (result.canceled || !result.filePath) return null
+    const pdf = await onWhitePaper(() =>
+      contents.printToPDF({
+        printBackground: true,
+        pageSize: LETTER_COUNTRIES.has(app.getLocaleCountryCode()) ? 'Letter' : 'A4',
+        margins: PDF_MARGINS
+      })
+    )
+    await writeRaw(result.filePath, pdf)
+    lastExport = result.filePath
+    return result.filePath
+  })
+  ipcMain.on('page:show-export', (_event, how: 'open' | 'reveal') => {
+    if (!lastExport) return
+    if (how === 'open') void shell.openPath(lastExport)
+    else shell.showItemInFolder(lastExport)
+  })
   ipcMain.on('context:table', (event, inTable: boolean) => {
     tableContext = inTable
     event.returnValue = null
@@ -378,9 +435,10 @@ function registerIpc(): void {
     else if (direction === 'out') contents.setZoomLevel(Math.max(level - ZOOM_STEP, -MAX_ZOOM))
     else contents.setZoomLevel(0)
   })
-  ipcMain.on('theme:set', (_event, theme: 'light' | 'dark') => {
-    window?.setTitleBarOverlay(OVERLAY[theme])
-    window?.setBackgroundColor(OVERLAY[theme].color)
+  ipcMain.on('theme:set', (_event, theme: 'light' | 'dark', background: unknown) => {
+    const color = typeof background === 'string' && HEX_COLOR.test(background) ? background : OVERLAY[theme].color
+    window?.setTitleBarOverlay({ ...OVERLAY[theme], color })
+    window?.setBackgroundColor(color)
   })
 }
 
