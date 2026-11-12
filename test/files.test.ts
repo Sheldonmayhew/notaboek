@@ -138,7 +138,7 @@ describe('adding images', () => {
   })
 })
 
-describe('coming from Folio', () => {
+describe('coming from the previous app name', () => {
   const before = () => inFolder('Folio')
   const after = () => inFolder('Notaboek')
 

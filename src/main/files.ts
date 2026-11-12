@@ -34,9 +34,9 @@ const PROFILE_ITEMS = [
   'settings.json'
 ]
 
-// Copies the profile from when the app was called Folio, the first time it runs
-// under its new name. The installer may have made the new folder already, so what
-// marks this as done is settings.json, which comes last.
+// Copies the profile from the previous app name the first time Notaboek runs.
+// The installer may have made the new folder already, so what marks this as done
+// is settings.json, which comes last.
 export function adoptProfile(from: string, to: string): void {
   const settings = path.join(to, 'settings.json')
   if (!existsSync(from) || existsSync(settings)) return
@@ -47,7 +47,7 @@ export function adoptProfile(from: string, to: string): void {
     try {
       cpSync(path.join(from, item), target, { recursive: true })
     } catch {
-      // Held open by a copy of Folio that's still running. It stays usable there.
+      // Held open by a copy of the previous app that's still running. It stays usable there.
     }
   }
   if (!existsSync(settings)) return

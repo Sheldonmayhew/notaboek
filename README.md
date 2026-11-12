@@ -1,6 +1,6 @@
 # Notaboek
 
-A calm, block-style editor for plain `.md` and `.txt` files, on Windows and in the browser. Open a folder and your text files become clean, Notion-style pages. Nothing is imported: every page stays an ordinary file on your computer. Signing in is optional, and keeps your pages in step between devices.
+A calm, block-style editor for plain `.md` and `.txt` files, on Windows and in the browser. Open a folder and your text files become clean, Notion-style pages. Nothing is imported: every page stays an ordinary file on your computer.
 
 ## Run it
 
@@ -77,25 +77,6 @@ To see or change the default folder, use the welcome screen, or click the folder
 
 Silent installs skip the question. If an administrator installs Notaboek for all users, only the person installing is asked, and everyone else starts with their own `Documents\Notaboek`.
 
-## The web version and sync
-
-The web version runs the same editor. With no account, pages stay in that browser. Signing in, on the web or from the sidebar on the desktop, keeps them in step with your other devices.
-
-- **The desktop syncs one folder:** your default folder when you sign in. Your files stay ordinary files, and signing out leaves them all where they are.
-- **Signing out of the web clears that browser,** so a shared computer keeps nothing. Your pages are still in your account.
-- **Nothing is overwritten.** If two devices change the same page, both versions are kept, the second as `Notes (conflict from Web 2026-10-31).md`. An edit beats a deletion.
-- **A page deleted on another device goes to the Recycle Bin** on the desktop.
-- **Sync stops rather than guessing.** If most of the synced folder vanishes, as with an unplugged drive, Notaboek pauses and asks.
-- **Bytes are kept exactly,** including encodings and line endings.
-
-Sync runs a few seconds after a change, when a window comes to the front, and every five minutes while it's in front.
-
-Limits: only text pages sync, not images beside them; pages over 4 MB stay on their device; each account has 100 MB; empty folders don't sync; a forgotten password can't be reset yet. Pages are stored unencrypted in the service's database, so whoever runs the service can read them.
-
-## Coming from Folio
-
-Notaboek used to be called Folio. The first time the installed app runs, it copies Folio's settings, sign-in and sample pages to its own profile, and a `Documents\Folio` folder stays your default folder. Folio itself isn't removed, so uninstall it when you're ready. Doing so leaves your pages where they are. Windows won't move your defaults across, so a file type that opened in Folio needs Notaboek choosing for it.
-
 ## How your files stay safe
 
 Notaboek treats the file on disk as the source of truth.
@@ -153,7 +134,7 @@ On Vercel, the site needs `DATABASE_URL` (from the Neon integration) and `BETTER
 
 ## Project layout
 
-- `src/shared/sync`: the sync engine, shared by the desktop app and the browser
+- `src/shared/sync`: the sync engine. The desktop app has no sign-in
 - `server`: the API and accounts
 - `web`: the browser's storage and its version of the desktop API
 - `src/main`: the Electron process, covering file access, encodings, atomic saves and the folder watcher

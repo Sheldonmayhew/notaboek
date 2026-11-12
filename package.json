@@ -2,6 +2,7 @@
   "name": "notaboek",
   "productName": "Notaboek",
   "version": "0.3.0",
+  "license": "MIT",
   "description": "A calm, block-style editor for plain .md and .txt files.",
   "main": "out/main/index.js",
   "private": true,
