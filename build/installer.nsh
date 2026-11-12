@@ -43,7 +43,7 @@
       StrCpy $NotaboekDefaultFolder "$DOCUMENTS\Notaboek"
       ClearErrors
       FileOpen $0 "${NOTABOEK_FOLDER_FILE}" r
-      ; Someone coming from Folio keeps the folder they chose back then.
+      ; Someone coming from the previous app keeps the folder they chose back then.
       ${If} ${Errors}
         ClearErrors
         FileOpen $0 "${OLD_FOLDER_FILE}" r
