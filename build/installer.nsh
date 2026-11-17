@@ -133,29 +133,52 @@
   FunctionEnd
 !macroend
 
+; Every extension Notaboek opens as a page, as listed in src/shared/fileTypes.ts.
+!macro notaboekForEachType ACTION
+  !insertmacro ${ACTION} ".md"
+  !insertmacro ${ACTION} ".markdown"
+  !insertmacro ${ACTION} ".mdown"
+  !insertmacro ${ACTION} ".mkd"
+  !insertmacro ${ACTION} ".mkdn"
+  !insertmacro ${ACTION} ".mdwn"
+  !insertmacro ${ACTION} ".mdtext"
+  !insertmacro ${ACTION} ".mdtxt"
+  !insertmacro ${ACTION} ".rmd"
+  !insertmacro ${ACTION} ".qmd"
+  !insertmacro ${ACTION} ".txt"
+  !insertmacro ${ACTION} ".text"
+  !insertmacro ${ACTION} ".csv"
+  !insertmacro ${ACTION} ".tsv"
+  !insertmacro ${ACTION} ".taskpaper"
+  !insertmacro ${ACTION} ".pdf"
+  !insertmacro ${ACTION} ".docx"
+!macroend
+
+!macro notaboekRegisterType EXT
+  WriteRegStr SHELL_CONTEXT "Software\Classes\Applications\${APP_EXECUTABLE_FILENAME}\SupportedTypes" "${EXT}" ""
+  WriteRegNone SHELL_CONTEXT "Software\Classes\${EXT}\OpenWithProgids" "${NOTABOEK_DOCUMENT}"
+  WriteRegStr SHELL_CONTEXT "${NOTABOEK_CAPABILITIES}\FileAssociations" "${EXT}" "${NOTABOEK_DOCUMENT}"
+!macroend
+
+!macro notaboekUnregisterType EXT
+  DeleteRegValue SHELL_CONTEXT "Software\Classes\${EXT}\OpenWithProgids" "${NOTABOEK_DOCUMENT}"
+!macroend
+
 !macro customInstall
   WriteRegStr SHELL_CONTEXT "Software\Classes\Applications\${APP_EXECUTABLE_FILENAME}" "FriendlyAppName" "Notaboek"
   WriteRegStr SHELL_CONTEXT "Software\Classes\Applications\${APP_EXECUTABLE_FILENAME}\shell\open\command" "" '"$INSTDIR\${APP_EXECUTABLE_FILENAME}" "%1"'
-  WriteRegStr SHELL_CONTEXT "Software\Classes\Applications\${APP_EXECUTABLE_FILENAME}\SupportedTypes" ".md" ""
-  WriteRegStr SHELL_CONTEXT "Software\Classes\Applications\${APP_EXECUTABLE_FILENAME}\SupportedTypes" ".markdown" ""
-  WriteRegStr SHELL_CONTEXT "Software\Classes\Applications\${APP_EXECUTABLE_FILENAME}\SupportedTypes" ".txt" ""
 
   WriteRegStr SHELL_CONTEXT "Software\Classes\${NOTABOEK_DOCUMENT}" "" "Text document"
   WriteRegStr SHELL_CONTEXT "Software\Classes\${NOTABOEK_DOCUMENT}\DefaultIcon" "" "$INSTDIR\${APP_EXECUTABLE_FILENAME},0"
   WriteRegStr SHELL_CONTEXT "Software\Classes\${NOTABOEK_DOCUMENT}\shell\open" "FriendlyAppName" "Notaboek"
   WriteRegStr SHELL_CONTEXT "Software\Classes\${NOTABOEK_DOCUMENT}\shell\open\command" "" '"$INSTDIR\${APP_EXECUTABLE_FILENAME}" "%1"'
-  WriteRegNone SHELL_CONTEXT "Software\Classes\.md\OpenWithProgids" "${NOTABOEK_DOCUMENT}"
-  WriteRegNone SHELL_CONTEXT "Software\Classes\.markdown\OpenWithProgids" "${NOTABOEK_DOCUMENT}"
-  WriteRegNone SHELL_CONTEXT "Software\Classes\.txt\OpenWithProgids" "${NOTABOEK_DOCUMENT}"
 
   ; Puts the app in Settings > Apps > Default apps, where someone can choose it.
   ; This only offers it. The defaults themselves stay as they are.
   WriteRegStr SHELL_CONTEXT "${NOTABOEK_CAPABILITIES}" "ApplicationName" "Notaboek"
-  WriteRegStr SHELL_CONTEXT "${NOTABOEK_CAPABILITIES}" "ApplicationDescription" "A calm, block-style editor for plain .md and .txt files."
+  WriteRegStr SHELL_CONTEXT "${NOTABOEK_CAPABILITIES}" "ApplicationDescription" "A calm, block-style editor for Markdown, text, CSV and TaskPaper files, with PDF markup and Word editing."
   WriteRegStr SHELL_CONTEXT "${NOTABOEK_CAPABILITIES}" "ApplicationIcon" "$INSTDIR\${APP_EXECUTABLE_FILENAME},0"
-  WriteRegStr SHELL_CONTEXT "${NOTABOEK_CAPABILITIES}\FileAssociations" ".md" "${NOTABOEK_DOCUMENT}"
-  WriteRegStr SHELL_CONTEXT "${NOTABOEK_CAPABILITIES}\FileAssociations" ".markdown" "${NOTABOEK_DOCUMENT}"
-  WriteRegStr SHELL_CONTEXT "${NOTABOEK_CAPABILITIES}\FileAssociations" ".txt" "${NOTABOEK_DOCUMENT}"
+  !insertmacro notaboekForEachType notaboekRegisterType
   WriteRegStr SHELL_CONTEXT "Software\RegisteredApplications" "Notaboek" "${NOTABOEK_CAPABILITIES}"
 
   System::Call 'shell32::SHChangeNotify(i 0x08000000, i 0, p 0, p 0)'
@@ -180,9 +203,7 @@
 !macro customUnInstall
   DeleteRegKey SHELL_CONTEXT "Software\Classes\Applications\${APP_EXECUTABLE_FILENAME}"
 
-  DeleteRegValue SHELL_CONTEXT "Software\Classes\.md\OpenWithProgids" "${NOTABOEK_DOCUMENT}"
-  DeleteRegValue SHELL_CONTEXT "Software\Classes\.markdown\OpenWithProgids" "${NOTABOEK_DOCUMENT}"
-  DeleteRegValue SHELL_CONTEXT "Software\Classes\.txt\OpenWithProgids" "${NOTABOEK_DOCUMENT}"
+  !insertmacro notaboekForEachType notaboekUnregisterType
   DeleteRegKey SHELL_CONTEXT "Software\Classes\${NOTABOEK_DOCUMENT}"
   DeleteRegValue SHELL_CONTEXT "Software\RegisteredApplications" "Notaboek"
   DeleteRegKey SHELL_CONTEXT "Software\Notaboek"

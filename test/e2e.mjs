@@ -5,7 +5,11 @@ import { cp, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
+import pdfLib from 'pdf-lib'
 import { _electron as electron } from 'playwright-core'
+
+const { PDFDict, PDFDocument, PDFName, StandardFonts } = pdfLib
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const shots = process.env.NOTABOEK_SHOTS ?? path.join(root, 'test-results')
@@ -791,6 +795,207 @@ try {
     // Leaving a large page that has been edited once froze the app.
     await openInTree('Tab first')
     await editor.locator('p', { hasText: 'First page.' }).waitFor({ timeout: 5000 })
+  })
+
+  await check('a .csv file is a table that saves only the edited row', async () => {
+    const csvPath = path.join(workspace, 'Prices.csv')
+    const original = 'Item,Qty,Price\r\nTea,2,"4,50"\r\nMilk,1,9.00\r\n'
+    await makePage(csvPath, original)
+    assert.equal(await treeRow('Prices').locator('.tree-ext').textContent(), '.csv')
+    await openInTree('Prices')
+    await editor.locator('td', { hasText: 'Milk' }).waitFor()
+    assert.equal(await editor.locator('th').count(), 3)
+    assert.equal(await editor.locator('td').count(), 6)
+    assert.equal(await editor.locator('td', { hasText: '4,50' }).count(), 1)
+    assert.equal(await editor.locator(':scope > p').count(), 0, 'nothing outside the table')
+    await wait(1000)
+    assert.equal(await readFile(csvPath, 'utf8'), original, 'opening changes nothing')
+    await editor.locator('td', { hasText: 'Milk' }).hover()
+    await wait(200)
+    assert.equal(await page.locator('.tab-view:not([hidden]) .block-handle').isVisible(), false)
+    await shot('14-csv-page')
+
+    await editor.locator('td', { hasText: 'Milk' }).click()
+    await wait(150)
+    await page.keyboard.press('End')
+    await page.keyboard.type(', fresh')
+    await saved()
+    await waitForFile(csvPath, (t) => t.includes('fresh'))
+    assert.equal(await readFile(csvPath, 'utf8'), 'Item,Qty,Price\r\nTea,2,"4,50"\r\n"Milk, fresh",1,9.00\r\n')
+
+    // Keys pressed the instant a click lands can beat the editor to the new caret.
+    await editor.locator('td', { hasText: '9.00' }).click()
+    await wait(150)
+    await page.keyboard.press('End')
+    await page.keyboard.press('Tab')
+    await page.keyboard.type('Juice')
+    await page.keyboard.press('Tab')
+    await page.keyboard.type('3')
+    await page.keyboard.type('/')
+    await wait(200)
+    assert.equal(await page.locator('.slash-menu').count(), 0, 'no blocks inside a table')
+    await page.keyboard.press('Backspace')
+    await saved()
+    const text = await waitForFile(csvPath, (t) => t.includes('Juice'))
+    assert.equal(text, 'Item,Qty,Price\r\nTea,2,"4,50"\r\n"Milk, fresh",1,9.00\r\nJuice,3,\r\n')
+  })
+
+  await check('a .tsv file reads with tabs', async () => {
+    await makePage(path.join(workspace, 'Codes.tsv'), 'Code\tCountry\nZA\tSouth Africa, Lesotho\n')
+    await openInTree('Codes')
+    await editor.locator('td', { hasText: 'South Africa, Lesotho' }).waitFor()
+    assert.equal(await editor.locator('td').count(), 2)
+  })
+
+  await check('a search finds a value in a table and lands in its row', async () => {
+    await page.keyboard.press('Control+Shift+f')
+    await page.keyboard.type('Lesotho')
+    await page.locator('.search-line', { hasText: 'Lesotho' }).first().click()
+    await findCount('1 of 1')
+    assert.equal(await editor.locator('.find-current').textContent(), 'Lesotho')
+    await page.keyboard.press('Escape')
+    await page.locator('.sidebar-search input').fill('')
+    await treeRow('Prices').waitFor()
+  })
+
+  await check('a .taskpaper file is a to-do list with @done dates', async () => {
+    const todoPath = path.join(workspace, 'Todo.taskpaper')
+    const original = 'Inbox:\n\t- Buy milk @today\n\t- Call Ann @done(2026-11-01)\n\tA note about the inbox\nWork:\n\t- Write report\n'
+    await makePage(todoPath, original)
+    await openInTree('Todo')
+    await editor.locator('h2', { hasText: 'Inbox' }).waitFor()
+    assert.equal(await editor.locator('h2').count(), 2)
+    assert.equal(await editor.locator('li[data-checked]').count(), 3)
+    assert.equal(await editor.locator('li[data-checked="true"]').count(), 1)
+    assert.equal(await editor.locator('.tag').first().textContent(), '@today')
+    await wait(1000)
+    assert.equal(await readFile(todoPath, 'utf8'), original, 'opening changes nothing')
+    await shot('15-taskpaper-page')
+
+    await editor.locator('li[data-checked="false"]', { hasText: 'Write report' }).locator('input').click()
+    await saved()
+    const now = new Date()
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+    assert.ok((await waitForFile(todoPath, (t) => t.includes('Write report @done'))).endsWith(`\t- Write report @done(${today})\n`))
+
+    await editor.locator('li p', { hasText: 'Buy milk' }).click()
+    await wait(150)
+    await page.keyboard.press('End')
+    await page.keyboard.press('Enter')
+    await page.keyboard.type('Feed the cat')
+    await saved()
+    const withCat = await waitForFile(todoPath, (t) => t.includes('cat'))
+    assert.ok(
+      withCat.startsWith('Inbox:\n\t- Buy milk @today\n\t- Feed the cat\n\t- Call Ann @done(2026-11-01)\n\tA note about the inbox\n'),
+      JSON.stringify(withCat)
+    )
+
+    await page.locator('.tab-view:not([hidden]) .page-end').click()
+    await wait(150)
+    await page.keyboard.type('/')
+    await page.locator('.slash-menu').waitFor()
+    assert.deepEqual(await page.locator('.slash-menu .menu-item-title').allTextContents(), ['Note', 'Project', 'Task'])
+    await page.keyboard.press('Escape')
+    await page.keyboard.press('Backspace')
+    await page.keyboard.type('- Plan the holiday')
+    await saved()
+    const text = await waitForFile(todoPath, (t) => t.includes('holiday'))
+    assert.ok(text.endsWith(`Work:\n\t- Write report @done(${today})\n\t- Plan the holiday\n`), text)
+  })
+
+  await check('R Markdown chunk options survive editing the code', async () => {
+    const rmdPath = path.join(workspace, 'Report.Rmd')
+    await makePage(rmdPath, '---\ntitle: Report\n---\n\n```{r, echo=FALSE}\nsummary(cars)\n```\n')
+    await openInTree('Report')
+    const code = editor.locator('pre', { hasText: 'summary(cars)' })
+    await code.waitFor()
+    assert.equal(await code.getAttribute('data-language'), 'r')
+    await code.click()
+    await wait(150)
+    await page.keyboard.press('End')
+    await page.keyboard.press('Enter')
+    await page.keyboard.type('plot(cars)')
+    await saved()
+    const text = await waitForFile(rmdPath, (t) => t.includes('plot'))
+    assert.equal(text, '---\ntitle: Report\n---\n\n```{r, echo=FALSE}\nsummary(cars)\nplot(cars)\n```\n')
+  })
+
+  await check('a PDF opens, and highlights and circles are saved into it', async () => {
+    const pdfPath = path.join(workspace, 'Brochure.pdf')
+    const made = await PDFDocument.create()
+    const font = await made.embedFont(StandardFonts.Helvetica)
+    made.addPage([612, 792]).drawText('Please highlight me', { x: 72, y: 650, size: 18, font })
+    await writeFile(pdfPath, await made.save())
+    await treeRow('Brochure').waitFor({ timeout: 4000 })
+    await openInTree('Brochure')
+    const view = page.locator('.tab-view:not([hidden])')
+    const pdfPage = view.locator('.pdf-page').first()
+    await pdfPage.locator('.textLayer span').first().waitFor({ timeout: 10000 })
+
+    await view.getByRole('button', { name: 'Circle' }).click()
+    const box = await pdfPage.boundingBox()
+    await page.mouse.move(box.x + 60, box.y + 60)
+    await page.mouse.down()
+    await page.mouse.move(box.x + 160, box.y + 110, { steps: 4 })
+    await page.mouse.move(box.x + 260, box.y + 160, { steps: 4 })
+    await page.mouse.up()
+
+    await view.getByRole('button', { name: 'Highlight' }).click()
+    const words = await pdfPage.locator('.textLayer span', { hasText: 'highlight me' }).first().boundingBox()
+    await page.mouse.move(words.x + 1, words.y + words.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(words.x + words.width - 1, words.y + words.height / 2, { steps: 6 })
+    await page.mouse.up()
+    await saved()
+
+    const subtypes = async () => {
+      const doc = await PDFDocument.load(await readFile(pdfPath))
+      const annots = doc.getPages()[0].node.Annots()
+      return (annots?.asArray() ?? []).map((_, index) => annots.lookup(index, PDFDict).get(PDFName.of('Subtype')).toString())
+    }
+    assert.deepEqual((await subtypes()).sort(), ['/Circle', '/Highlight'])
+    await shot('10-pdf-marks')
+
+    // Clicking the circle selects it, and Delete takes it out of the file.
+    await view.getByTitle('Select text and marks').click()
+    await page.mouse.click(box.x + 160, box.y + 110)
+    await view.locator('.pdf-selected').waitFor({ timeout: 2000 })
+    await page.keyboard.press('Delete')
+    await saved()
+    assert.deepEqual(await subtypes(), ['/Highlight'])
+  })
+
+  await check('a Word document can be edited and stays a Word document', async () => {
+    const docxPath = path.join(workspace, 'Minutes.docx')
+    const W = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"'
+    const rels = (items) =>
+      `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${items}</Relationships>`
+    await writeFile(
+      docxPath,
+      zipSync({
+        '[Content_Types].xml': strToU8(
+          '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>'
+        ),
+        '_rels/.rels': strToU8(
+          rels('<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>')
+        ),
+        'word/document.xml': strToU8(
+          `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document ${W}><w:body><w:p><w:r><w:t>First paragraph.</w:t></w:r></w:p><w:p><w:r><w:rPr><w:b/></w:rPr><w:t>Second paragraph</w:t></w:r></w:p><w:sectPr/></w:body></w:document>`
+        )
+      })
+    )
+    await treeRow('Minutes').waitFor({ timeout: 4000 })
+    await openInTree('Minutes')
+    const content = page.locator('.tab-view:not([hidden]) .docx-content')
+    await content.waitFor({ timeout: 10000 })
+    await content.locator('p', { hasText: 'Second paragraph' }).click()
+    await page.keyboard.press('End')
+    await page.keyboard.type(' with more')
+    await saved()
+    const xml = strFromU8(unzipSync(await readFile(docxPath))['word/document.xml'])
+    assert.ok(xml.includes('<w:p><w:r><w:t>First paragraph.</w:t></w:r></w:p>'), xml)
+    assert.ok(xml.includes('<w:r><w:rPr><w:b/></w:rPr><w:t xml:space="preserve">Second paragraph with more</w:t></w:r>'), xml)
+    await shot('11-docx-edit')
   })
 
   await check('Ctrl+N makes a new page ready to name', async () => {

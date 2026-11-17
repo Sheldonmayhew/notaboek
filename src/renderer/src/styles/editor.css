@@ -408,6 +408,16 @@
   text-decoration-color: var(--border-strong);
 }
 
+/* TaskPaper @tags */
+
+.page-content .tag {
+  color: var(--accent);
+}
+
+.page-content li[data-checked='true'] > div > p .tag {
+  color: inherit;
+}
+
 /* Callouts */
 
 .page-content .callout {
@@ -593,6 +603,17 @@
 .page-content td p {
   min-height: 1.5em;
   padding: 0;
+}
+
+/* A .csv or .tsv page is all table, where figures read best in line. */
+.page-content[data-flavor='csv'] .tableWrapper,
+.page-content[data-flavor='tsv'] .tableWrapper {
+  margin-top: 0;
+}
+
+.page-content[data-flavor='csv'] td,
+.page-content[data-flavor='tsv'] td {
+  font-variant-numeric: tabular-nums;
 }
 
 .page-content .selectedCell::after {

@@ -1,7 +1,11 @@
 import type { Node as PMNode } from '@tiptap/pm/model'
+import { flavorOf, type Flavor } from '../../../shared/fileTypes'
+import { parseTable, positionOfTableLine, serializeTable, type TableLayout } from './delimited'
 import { parseMarkup, serializeBlock } from './markdown'
-import type { Flavor } from './tokenizer'
+import { matchOrigins } from './matching'
+import { parseTaskPaper, serializeTaskPaperBlock, taskPaperDepths } from './taskpaper'
 
+export { flavorOf }
 export type { Flavor }
 
 interface SourceBlock {
@@ -22,6 +26,8 @@ export interface LoadedDocument {
   blocks: SourceBlock[]
   eol: '\n' | '\r\n'
   bom: boolean
+  // For a .csv or .tsv file, whose blocks are the rows of its table.
+  table: TableLayout | null
 }
 
 const FRONTMATTER = /^---[ \t]*\n((?:[\s\S]*?\n)?)---[ \t]*(?:\n|$)/
@@ -39,8 +45,6 @@ function findFrontmatter(text: string): string | null {
   if (lines.length === 0 || !YAML_KEY.test(lines[0])) return null
   return lines.every((line) => YAML_KEY.test(line) || YAML_CONTINUATION.test(line)) ? match[0] : null
 }
-
-export const flavorOf = (path: string): Flavor => (/\.txt$/i.test(path) ? 'txt' : 'md')
 
 const keyOf = (node: PMNode) => JSON.stringify(node.toJSON())
 
@@ -70,6 +74,7 @@ export function offsetOfLine(text: string, line: number): number {
 // Finds the block of the page that a line of the file ended up in, so a search
 // result can land near its match. Frontmatter counts as the top of the page.
 export function positionOfLine(loaded: LoadedDocument, line: number): number {
+  if (loaded.table) return positionOfTableLine(loaded.doc, { head: loaded.head, records: loaded.blocks }, line)
   if (loaded.blocks.length !== loaded.doc.childCount) return 0
   let reached = lineBreaks(loaded.head)
   let position = 0
@@ -82,18 +87,35 @@ export function positionOfLine(loaded: LoadedDocument, line: number): number {
   return position
 }
 
-export function parseDocument(raw: string, flavor: Flavor): LoadedDocument {
-  const bom = raw.charCodeAt(0) === 0xfeff
-  const eol = dominantEol(raw)
-  const text = (bom ? raw.slice(1) : raw).replace(/\r\n?/g, '\n')
-
-  const frontmatter = flavor === 'md' ? findFrontmatter(text) : null
-  const body = frontmatter ? text.slice(frontmatter.length) : text
+function parseBody(body: string, flavor: 'md' | 'txt' | 'taskpaper'): { doc: PMNode; ranges: Array<[number, number]> } {
+  if (flavor === 'taskpaper') return parseTaskPaper(body)
   const { doc, tokens } = parseMarkup(body, flavor)
-
   const ranges = tokens
     .filter((token) => token.level === 0 && token.nesting >= 0 && token.map)
     .map((token) => token.map as [number, number])
+  return { doc, ranges }
+}
+
+export function parseDocument(raw: string, requested: Flavor): LoadedDocument {
+  const bom = raw.charCodeAt(0) === 0xfeff
+  const eol = dominantEol(raw)
+
+  // A table keeps its line breaks as they are, since one inside a quoted value
+  // can differ from the ones between rows.
+  if (requested === 'csv' || requested === 'tsv') {
+    const table = parseTable(bom ? raw.slice(1) : raw, requested === 'tsv')
+    if (table) {
+      const { doc, head, records, layout } = table
+      return { flavor: requested, doc, raw, frontmatter: null, head, blocks: records, eol, bom, table: layout }
+    }
+  }
+  // Too big to draw as a table, it opens as the plain text it is.
+  const flavor = requested === 'csv' || requested === 'tsv' ? 'txt' : requested
+
+  const text = (bom ? raw.slice(1) : raw).replace(/\r\n?/g, '\n')
+  const frontmatter = flavor === 'md' ? findFrontmatter(text) : null
+  const body = frontmatter ? text.slice(frontmatter.length) : text
+  const { doc, ranges } = parseBody(body, flavor)
 
   const loaded: LoadedDocument = {
     flavor,
@@ -103,7 +125,8 @@ export function parseDocument(raw: string, flavor: Flavor): LoadedDocument {
     head: frontmatter ?? '',
     blocks: [],
     eol,
-    bom
+    bom,
+    table: null
   }
 
   if (ranges.length === 0) {
@@ -137,43 +160,12 @@ export function parseDocument(raw: string, flavor: Flavor): LoadedDocument {
   return loaded
 }
 
-// Finds which original block each current block came from, or -1 for a new or
-// edited one. Runs of unchanged blocks at either end match by position, so
-// identical paragraphs keep their own source around an edit.
-function matchOrigins(keys: string[], blocks: SourceBlock[]): number[] {
-  const origins = keys.map(() => -1)
-  let start = 0
-  while (start < keys.length && start < blocks.length && keys[start] === blocks[start].key) {
-    origins[start] = start
-    start++
-  }
-
-  let end = 0
-  while (
-    end < keys.length - start &&
-    end < blocks.length - start &&
-    keys[keys.length - 1 - end] === blocks[blocks.length - 1 - end].key
-  ) {
-    origins[keys.length - 1 - end] = blocks.length - 1 - end
-    end++
-  }
-
-  const available = new Map<string, number[]>()
-  for (let index = start; index < blocks.length - end; index++) {
-    const list = available.get(blocks[index].key)
-    if (list) list.push(index)
-    else available.set(blocks[index].key, [index])
-  }
-
-  for (let index = start; index < keys.length - end; index++) {
-    const origin = available.get(keys[index])?.shift()
-    if (origin !== undefined) origins[index] = origin
-  }
-  return origins
-}
-
 export function serializeDocument(doc: PMNode, loaded: LoadedDocument): string {
+  if (loaded.table) return serializeTable(doc, { ...loaded, records: loaded.blocks, layout: loaded.table })
   const { blocks, flavor } = loaded
+  // A TaskPaper line can't run into the next, so new lines need no blank line between them.
+  const lineBased = flavor === 'taskpaper'
+  const separator = lineBased ? '\n' : '\n\n'
   const sourceKeys = new Set(blocks.map((block) => block.key))
 
   // Blank paragraphs can't be stored in Markdown, except for the rare source
@@ -195,7 +187,7 @@ export function serializeDocument(doc: PMNode, loaded: LoadedDocument): string {
   const startsWithNewBlock = kept[0] === -1
   let out = startsWithNewBlock
     ? loaded.head.trim()
-      ? `${loaded.head.trimEnd()}\n\n`
+      ? `${loaded.head.trimEnd()}${separator}`
       : ''
     : loaded.head
   const present = new Set(kept)
@@ -212,19 +204,23 @@ export function serializeDocument(doc: PMNode, loaded: LoadedDocument): string {
           ? origin - 1
           : -1
     const gap = blocks[slot]?.gap
-    if (gap === undefined || slot === blocks.length - 1) return '\n\n'
+    if (gap === undefined || slot === blocks.length - 1) return separator
     const bothOriginal = previous !== -1 && origin !== -1
     // Pieces of one long paragraph are only lines of text, so merging is harmless.
     const sameParagraph = before.attrs.piece && after.attrs.piece
-    if (!bothOriginal && !sameParagraph && !/\n[ \t]*\n/.test(gap)) return '\n\n'
+    if (!lineBased && !bothOriginal && !sameParagraph && !/\n[ \t]*\n/.test(gap)) return separator
     usedGaps.add(slot)
     return gap
   }
 
+  const depths = lineBased ? taskPaperDepths(nodes) : []
+  const write = (node: PMNode, index: number) =>
+    lineBased ? serializeTaskPaperBlock(node, depths[index]) : serializeBlock(node, flavor === 'md' ? 'md' : 'txt')
+
   nodes.forEach((node, index) => {
     const origin = kept[index]
     if (index > 0) out += gapBetween(kept[index - 1], origin, nodes[index - 1], node)
-    out += origin === -1 ? serializeBlock(node, flavor) : blocks[origin].source
+    out += origin === -1 ? write(node, index) : blocks[origin].source
   })
 
   // Link reference definitions live between blocks. If the blocks around one

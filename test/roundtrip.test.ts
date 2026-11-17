@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { parseDocument, serializeDocument, type Flavor } from '../src/renderer/src/doc/document'
 import { parseMarkup, serializeBlock } from '../src/renderer/src/doc/markdown'
 import { schema } from '../src/renderer/src/doc/schema'
+import type { Markup } from '../src/renderer/src/doc/tokenizer'
 import { MARKDOWN, TEXT } from './fixtures'
 
 const all: Array<[Flavor, string, string]> = [
@@ -280,7 +281,7 @@ describe('regressions found by QA', () => {
 })
 
 describe('regressions found by the code reviews', () => {
-  const rewrite = (text: string, flavor: Flavor = 'md') => {
+  const rewrite = (text: string, flavor: Markup = 'md') => {
     const { doc } = parseMarkup(text, flavor)
     return serializeBlock(doc.child(0), flavor)
   }
@@ -430,7 +431,7 @@ describe('Markdown structure', () => {
 })
 
 describe('highlights', () => {
-  const marksIn = (text: string, flavor: Flavor = 'md') => {
+  const marksIn = (text: string, flavor: Markup = 'md') => {
     const found: Array<[string, string | null]> = []
     parseMarkup(text, flavor).doc.descendants((node) => {
       if (!node.isText) return

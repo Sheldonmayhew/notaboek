@@ -4,9 +4,14 @@ import { MarkdownParser, MarkdownSerializer, defaultMarkdownSerializer } from 'p
 import type { MarkdownSerializerState } from 'prosemirror-markdown'
 import { DEFAULT_HIGHLIGHT, highlightHex } from '../editor/Highlight'
 import { schema } from './schema'
-import { createTokenizer, type Flavor } from './tokenizer'
+import { createTokenizer, type Markup } from './tokenizer'
 
 type LinkState = MarkdownSerializerState & { inAutolink?: boolean }
+
+// R Markdown and Quarto write a runnable block as ```{r, echo=FALSE}, where the
+// language is the first word inside the braces.
+export const languageOfInfo = (info: string): string | null =>
+  (/^\{\s*([^\s,}]+)/.exec(info)?.[1] ?? info.split(/\s+/)[0]) || null
 
 const cellAttrs = (token: Token) => {
   const align = /text-align:\s*(\w+)/.exec(String(token.attrGet('style') ?? ''))
@@ -45,7 +50,11 @@ const parserTokens = {
   fence: {
     block: 'codeBlock',
     noCloseToken: true,
-    getAttrs: (token: Token) => ({ language: token.info.trim().split(/\s+/)[0] || null })
+    getAttrs: (token: Token) => {
+      const info = token.info.trim()
+      const language = languageOfInfo(info)
+      return { language, info: info && info !== language ? info : null }
+    }
   },
   hr: { node: 'horizontalRule' },
   image: {
@@ -85,7 +94,7 @@ const parserTokens = {
   html_inline: { node: 'rawInline', getAttrs: (token: Token) => ({ html: token.content }) }
 }
 
-function createParser(flavor: Flavor) {
+function createParser(flavor: Markup) {
   const md = createTokenizer(flavor)
   let lastTokens: Token[] = []
   const tokenizer = {
@@ -103,12 +112,12 @@ function createParser(flavor: Flavor) {
   }
 }
 
-const parsers: Record<Flavor, ReturnType<typeof createParser>> = {
+const parsers: Record<Markup, ReturnType<typeof createParser>> = {
   md: createParser('md'),
   txt: createParser('txt')
 }
 
-export const parseMarkup = (text: string, flavor: Flavor) => parsers[flavor].parse(text)
+export const parseMarkup = (text: string, flavor: Markup) => parsers[flavor].parse(text)
 
 // Adapted from prosemirror-markdown, which does not export it.
 function isPlainUrl(link: PMNode['marks'][number], parent: PMNode, index: number): boolean {
@@ -173,7 +182,9 @@ function createSerializer({ escape, literalBreaks }: SerializerOptions): Markdow
           (longest, run) => (run.length >= longest.length ? `${run}\`` : longest),
           '```'
         )
-        state.write(`${fence}${node.attrs.language ?? ''}\n`)
+        // The rest of the first line, such as a chunk's options, stays with its language.
+        const { info, language } = node.attrs
+        state.write(`${fence}${info && languageOfInfo(info) === language ? info : (language ?? '')}\n`)
         state.text(node.textContent, false)
         state.ensureNewLine()
         state.write(fence)
@@ -313,7 +324,7 @@ const sameNode = (a: PMNode, b: PMNode) => JSON.stringify(a.toJSON()) === JSON.s
 
 // Writes one edited block. Markdown escapes are only added when the text would
 // otherwise change meaning, so `snake_case` stays `snake_case` and not `snake\_case`.
-export function serializeBlock(node: PMNode, flavor: Flavor): string {
+export function serializeBlock(node: PMNode, flavor: Markup): string {
   const doc = node.type.schema.topNodeType.create(null, [node])
   if (flavor === 'txt') return serializers.text.serialize(doc, { tightLists: true })
 

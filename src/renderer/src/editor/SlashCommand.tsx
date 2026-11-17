@@ -150,7 +150,7 @@ export const SlashCommand = Extension.create({
           return true
         },
         items: ({ query, editor }) =>
-          filterBlocks(query).filter((block) => block.id !== 'image' || canInsertImages(editor)),
+          filterBlocks(editor, query).filter((block) => block.id !== 'image' || canInsertImages(editor)),
         command: ({ editor, range, props }: { editor: Editor; range: Range; props: BlockType }) => {
           editor.chain().focus().deleteRange(range).run()
           leaveList(editor, props)

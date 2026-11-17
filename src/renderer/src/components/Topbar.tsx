@@ -13,6 +13,7 @@ import {
   Type
 } from 'lucide-react'
 import { useRef, useState } from 'react'
+import type { DocumentKind } from '../../../shared/fileTypes'
 import type { SaveStatus } from '../doc/saveSession'
 import { api, baseName, relativeTo, stripExtension } from '../platform'
 import { ACCENTS, PAPERS, type FontChoice, type Prefs, type ThemeChoice } from '../prefs'
@@ -42,6 +43,8 @@ const THEMES: Array<{ id: ThemeChoice; label: string; icon: typeof Sun }> = [
 interface TopbarProps {
   workspace: string
   path: string | null
+  // A PDF or Word document has no source to view, and isn't printed from here.
+  kind: 'page' | DocumentKind
   status: SaveStatus
   prefs: Prefs
   sourceMode: boolean
@@ -61,7 +64,8 @@ function Toggle({ on }: { on: boolean }) {
 }
 
 export function Topbar(props: TopbarProps) {
-  const { workspace, path, status, prefs, sourceMode, sidebarVisible, onPrefs } = props
+  const { workspace, path, kind, status, prefs, sourceMode, sidebarVisible, onPrefs } = props
+  const isPage = kind === 'page'
   const [menuOpen, setMenuOpen] = useState(false)
   const moreButton = useRef<HTMLButtonElement>(null)
   const [words, setWords] = useState(0)
@@ -125,7 +129,8 @@ export function Topbar(props: TopbarProps) {
           className="options-menu"
           onClose={() => setMenuOpen(false)}
         >
-          <div className="menu-label">Style</div>
+          {isPage && <div className="menu-label">Style</div>}
+          {isPage && (
           <div className="font-picker">
             {FONTS.map((font) => (
               <button
@@ -141,41 +146,50 @@ export function Topbar(props: TopbarProps) {
               </button>
             ))}
           </div>
-          <div className="menu-separator" />
-          <button
-            type="button"
-            className="menu-item"
-            onClick={() => {
-              setMenuOpen(false)
-              props.onFind()
-            }}
-          >
-            <Search size={18} strokeWidth={1.75} />
-            <span className="menu-item-title">Find in page</span>
-            <span className="menu-item-hint">Ctrl+F</span>
-          </button>
-          <button type="button" className="menu-item" onClick={() => onPrefs({ smallText: !prefs.smallText })}>
-            <Type size={18} strokeWidth={1.75} />
-            <span className="menu-item-title">Small text</span>
-            <Toggle on={prefs.smallText} />
-          </button>
-          <button type="button" className="menu-item" onClick={() => onPrefs({ fullWidth: !prefs.fullWidth })}>
-            <Maximize2 size={18} strokeWidth={1.75} />
-            <span className="menu-item-title">Full width</span>
-            <Toggle on={prefs.fullWidth} />
-          </button>
-          <button
-            type="button"
-            className="menu-item"
-            onClick={() => {
-              setMenuOpen(false)
-              props.onToggleSource()
-            }}
-          >
-            <Code2 size={18} strokeWidth={1.75} />
-            <span className="menu-item-title">View source</span>
-            <Toggle on={sourceMode} />
-          </button>
+          )}
+          {isPage && <div className="menu-separator" />}
+          {kind !== 'pdf' && (
+            <button
+              type="button"
+              className="menu-item"
+              onClick={() => {
+                setMenuOpen(false)
+                props.onFind()
+              }}
+            >
+              <Search size={18} strokeWidth={1.75} />
+              <span className="menu-item-title">Find in page</span>
+              <span className="menu-item-hint">Ctrl+F</span>
+            </button>
+          )}
+          {isPage && (
+            <button type="button" className="menu-item" onClick={() => onPrefs({ smallText: !prefs.smallText })}>
+              <Type size={18} strokeWidth={1.75} />
+              <span className="menu-item-title">Small text</span>
+              <Toggle on={prefs.smallText} />
+            </button>
+          )}
+          {isPage && (
+            <button type="button" className="menu-item" onClick={() => onPrefs({ fullWidth: !prefs.fullWidth })}>
+              <Maximize2 size={18} strokeWidth={1.75} />
+              <span className="menu-item-title">Full width</span>
+              <Toggle on={prefs.fullWidth} />
+            </button>
+          )}
+          {isPage && (
+            <button
+              type="button"
+              className="menu-item"
+              onClick={() => {
+                setMenuOpen(false)
+                props.onToggleSource()
+              }}
+            >
+              <Code2 size={18} strokeWidth={1.75} />
+              <span className="menu-item-title">View source</span>
+              <Toggle on={sourceMode} />
+            </button>
+          )}
           {api.capabilities.localFiles && (
             <button
               type="button"
@@ -189,30 +203,34 @@ export function Topbar(props: TopbarProps) {
               <span className="menu-item-title">Show in File Explorer</span>
             </button>
           )}
-          <div className="menu-separator" />
-          <button
-            type="button"
-            className="menu-item"
-            onClick={() => {
-              setMenuOpen(false)
-              props.onExportPdf()
-            }}
-          >
-            <FileDown size={18} strokeWidth={1.75} />
-            <span className="menu-item-title">Export to PDF</span>
-          </button>
-          <button
-            type="button"
-            className="menu-item"
-            onClick={() => {
-              setMenuOpen(false)
-              props.onPrint()
-            }}
-          >
-            <Printer size={18} strokeWidth={1.75} />
-            <span className="menu-item-title">Print</span>
-            <span className="menu-item-hint">Ctrl+P</span>
-          </button>
+          {isPage && <div className="menu-separator" />}
+          {isPage && (
+            <button
+              type="button"
+              className="menu-item"
+              onClick={() => {
+                setMenuOpen(false)
+                props.onExportPdf()
+              }}
+            >
+              <FileDown size={18} strokeWidth={1.75} />
+              <span className="menu-item-title">Export to PDF</span>
+            </button>
+          )}
+          {isPage && (
+            <button
+              type="button"
+              className="menu-item"
+              onClick={() => {
+                setMenuOpen(false)
+                props.onPrint()
+              }}
+            >
+              <Printer size={18} strokeWidth={1.75} />
+              <span className="menu-item-title">Print</span>
+              <span className="menu-item-hint">Ctrl+P</span>
+            </button>
+          )}
           <div className="menu-separator" />
           <div className="menu-label">Theme</div>
           <div className="theme-picker">
@@ -271,8 +289,8 @@ export function Topbar(props: TopbarProps) {
               ))}
             </div>
           </div>
-          <div className="menu-separator" />
-          <div className="menu-footer">Word count: {words.toLocaleString()}</div>
+          {kind !== 'pdf' && <div className="menu-separator" />}
+          {kind !== 'pdf' && <div className="menu-footer">Word count: {words.toLocaleString()}</div>}
         </Popover>
       )}
     </header>

@@ -1,9 +1,10 @@
 // Synced paths are relative, use forward slashes, and are compared the way Windows
 // compares them, so "Notes.md" and "notes.md" can't become two files on a device.
 
+import { PAGE_FILE } from '../fileTypes'
+
 export const MAX_SYNC_BYTES = 4 * 1024 * 1024
 
-const TEXT_FILE = /\.(md|markdown|mdown|mkd|txt)$/i
 const RESERVED_NAME = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\.|$)/i
 const FORBIDDEN = /[\\:*?"<>|\u0000-\u001f]/
 
@@ -13,7 +14,7 @@ export const pathKey = (path: string) => path.normalize('NFC').toLowerCase()
 // disk: only text files, and never a route out of the synced folder.
 export function isSafePath(path: string): boolean {
   if (typeof path !== 'string' || path.length === 0 || path.length > 1024) return false
-  if (!TEXT_FILE.test(path) || FORBIDDEN.test(path) || path.startsWith('/')) return false
+  if (!PAGE_FILE.test(path) || FORBIDDEN.test(path) || path.startsWith('/')) return false
   return path.split('/').every((part) => {
     if (part === '' || part === '.' || part === '..') return false
     if (part.endsWith('.') || part.endsWith(' ') || part.startsWith('.')) return false

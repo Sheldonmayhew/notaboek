@@ -1,4 +1,6 @@
+import { File, FileBadge, FileCheck, FileSpreadsheet, FileText, FileType, type LucideIcon } from 'lucide-react'
 import type { NotaboekApi } from '../../shared/api'
+import { documentKindOf, flavorOf, type DocumentKind, type Flavor } from '../../shared/fileTypes'
 
 declare global {
   interface Window {
@@ -17,6 +19,28 @@ export const dirName = (path: string) => path.replace(/[\\/][^\\/]*$/, '')
 export const stripExtension = (name: string) => name.replace(/\.[^.]+$/, '')
 
 export const extensionOf = (name: string) => /\.[^.]+$/.exec(name)?.[0] ?? ''
+
+const ICONS: Record<Flavor, LucideIcon> = {
+  md: FileText,
+  txt: File,
+  csv: FileSpreadsheet,
+  tsv: FileSpreadsheet,
+  taskpaper: FileCheck
+}
+
+const DOCUMENT_ICONS: Record<DocumentKind, LucideIcon> = {
+  pdf: FileBadge,
+  docx: FileType
+}
+
+export const pageIcon = (path: string) => {
+  const kind = documentKindOf(path)
+  return kind ? DOCUMENT_ICONS[kind] : ICONS[flavorOf(path)]
+}
+
+// A Markdown page is the usual kind, so only other kinds say what they are.
+export const shownExtension = (name: string) =>
+  flavorOf(name) === 'md' && !documentKindOf(name) ? '' : extensionOf(name).toLowerCase()
 
 // Windows paths ignore case, and a link can spell a file's name either way.
 export const samePath = (a: string | null | undefined, b: string | null | undefined) =>

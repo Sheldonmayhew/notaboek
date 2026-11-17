@@ -4,20 +4,24 @@ import { cp, mkdir, readFile as readRaw, writeFile as writeRaw } from 'node:fs/p
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import type { Opened, SearchOptions, Session, TableAction, TextEncodingName, TrashResult } from '../shared/api'
+import { DOCUMENT_EXTENSIONS, OPENABLE_FILE, PAGE_EXTENSIONS } from '../shared/fileTypes'
 import {
   IMAGE_FILE,
-  TEXT_FILE,
   adoptProfile,
   createUniqueFile,
+  currentMtime,
   importImage,
   isIgnoredName,
   listDir,
   moveEntries,
+  readBinary,
   readDefaultFolder,
   readFile,
   renameFile,
   saveImage,
   searchFolder,
+  writeBinary,
+  writeBinaryOnClose,
   writeDefaultFolder,
   writeFile,
   writeOnClose
@@ -54,6 +58,8 @@ let settings: Settings = { workspace: null, file: null, tabs: [], recent: [] }
 let pendingFile: string | null = null
 let defaultFolder = ''
 let tableContext = false
+// A .csv page is one table, which can't be deleted without emptying the file.
+let tableIsFile = false
 let latestSearch = 0
 let lastExport: string | null = null
 const cloudSync = new DesktopSync((status) => window?.webContents.send('sync:status', status))
@@ -171,7 +177,7 @@ function openPath(file: string): Opened {
 // A second launch can come from another folder, so paths resolve against that.
 function fileFromArgs(argv: string[], cwd = process.cwd()): string | null {
   const paths = argv.slice(app.isPackaged ? 1 : 2).map((arg) => path.resolve(cwd, arg))
-  return paths.find((file) => TEXT_FILE.test(file) && existsSync(file)) ?? null
+  return paths.find((file) => OPENABLE_FILE.test(file) && existsSync(file)) ?? null
 }
 
 // Opening a file on a network path makes Windows connect to that server and offer
@@ -240,7 +246,11 @@ function registerIpc(): void {
     const result = await dialog.showOpenDialog(window!, {
       defaultPath: startFolder(),
       properties: ['openFile'],
-      filters: [{ name: 'Text files', extensions: ['md', 'markdown', 'txt'] }]
+      filters: [
+        { name: 'Pages and documents', extensions: [...PAGE_EXTENSIONS, ...DOCUMENT_EXTENSIONS] },
+        { name: 'Text files', extensions: PAGE_EXTENSIONS },
+        { name: 'PDF and Word documents', extensions: DOCUMENT_EXTENSIONS }
+      ]
     })
     return result.canceled ? null : openPath(result.filePaths[0])
   })
@@ -320,6 +330,18 @@ function registerIpc(): void {
       }
     }
   )
+  ipcMain.handle('fs:read-binary', (_event, file: string) => readBinary(guard(file)))
+  ipcMain.handle('fs:mtime', (_event, file: string) => currentMtime(guard(file)))
+  ipcMain.handle('fs:write-binary', (_event, file: string, bytes: Uint8Array, expected: number | null) =>
+    writeBinary(guard(file), bytes, expected)
+  )
+  ipcMain.on('fs:write-binary-now', async (event, file: string, bytes: Uint8Array, expected: number) => {
+    try {
+      event.returnValue = await writeBinaryOnClose(guard(file), bytes, expected)
+    } catch {
+      event.returnValue = false
+    }
+  })
   ipcMain.handle('fs:create', async (_event, dir: string, name: string) => {
     await mkdir(guard(dir), { recursive: true })
     return createUniqueFile(guard(dir), name)
@@ -421,8 +443,9 @@ function registerIpc(): void {
     if (how === 'open') void shell.openPath(lastExport)
     else shell.showItemInFolder(lastExport)
   })
-  ipcMain.on('context:table', (event, inTable: boolean) => {
+  ipcMain.on('context:table', (event, inTable: boolean, wholeFile: boolean) => {
     tableContext = inTable
+    tableIsFile = wholeFile === true
     event.returnValue = null
   })
   // The app has no menu bar, so these have to be wired up by hand.
@@ -514,7 +537,7 @@ function createWindow(): void {
         { type: 'separator' },
         action('Delete row', 'deleteRow'),
         action('Delete column', 'deleteColumn'),
-        action('Delete table', 'deleteTable'),
+        ...(tableIsFile ? [] : [action('Delete table', 'deleteTable')]),
         { type: 'separator' }
       )
       tableContext = false

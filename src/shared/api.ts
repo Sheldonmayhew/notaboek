@@ -21,6 +21,17 @@ export type SaveResult =
   | { ok: true; mtime: number; encoding: TextEncodingName }
   | { ok: false; reason: 'conflict' | 'missing' | 'error'; message?: string }
 
+// A PDF or Word document, read and written as it is.
+export interface BinarySnapshot {
+  path: string
+  bytes: Uint8Array
+  mtime: number
+}
+
+export type BinarySaveResult =
+  | { ok: true; mtime: number }
+  | { ok: false; reason: 'conflict' | 'missing' | 'error'; message?: string }
+
 export interface MoveResult {
   moved: Array<{ from: string; to: string }>
   failed: string[]
@@ -108,6 +119,11 @@ export interface NotaboekApi {
   ): Promise<SaveResult>
   // For the moment the window closes. False means the text is not on disk.
   writeFileSync(path: string, text: string, encoding: TextEncodingName, expectedMtime: number): boolean
+  readBinary(path: string): Promise<BinarySnapshot>
+  // Null when the file is gone. Cheaper than reading a large document to see if it changed.
+  modifiedTime(path: string): Promise<number | null>
+  writeBinary(path: string, bytes: Uint8Array, expectedMtime: number | null): Promise<BinarySaveResult>
+  writeBinarySync(path: string, bytes: Uint8Array, expectedMtime: number): boolean
   createFile(dir: string, name: string): Promise<string>
   rename(path: string, name: string): Promise<string>
   // With no folder given, this asks for one. Null means the user cancelled.
@@ -130,7 +146,7 @@ export interface NotaboekApi {
   toggleFullScreen(): void
   zoom(direction: 'in' | 'out' | 'reset'): void
   // Must arrive before the right-click menu is built, so it blocks.
-  noteTableContext(inTable: boolean): void
+  noteTableContext(inTable: boolean, wholeFile?: boolean): void
   onTableAction(listener: (action: TableAction) => void): () => void
   onFileWaiting(listener: () => void): () => void
   onFilesChanged(listener: () => void): () => void
