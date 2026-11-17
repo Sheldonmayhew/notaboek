@@ -60,11 +60,29 @@ function readRelationships(files: Map<string, Uint8Array>, part: string): Map<st
 const partOfType = (relationships: Map<string, Relationship>, type: string) =>
   [...relationships.values()].find((item) => !item.external && item.type === `${TYPE}${type}`)?.target ?? null
 
+// A zip says how big each part unpacks to, and the unpacking never goes past
+// that, so adding up those sizes first stops a small file from filling memory.
+export const MAX_UNZIPPED_BYTES = 512 * 1024 * 1024
+export const MAX_PARTS = 10_000
+
+class TooLarge extends Error {}
+
 export function openDocx(bytes: Uint8Array): DocxPackage {
   let entries: Record<string, Uint8Array>
+  let total = 0
+  let parts = 0
   try {
-    entries = unzipSync(bytes)
-  } catch {
+    entries = unzipSync(bytes, {
+      filter: (file) => {
+        total += file.originalSize
+        if (++parts > MAX_PARTS || total > MAX_UNZIPPED_BYTES) {
+          throw new TooLarge('This Word document unpacks to more than Notaboek can open (512 MB).')
+        }
+        return true
+      }
+    })
+  } catch (error) {
+    if (error instanceof TooLarge) throw error
     throw new Error("This file isn't a Word document Notaboek can read. It may be damaged, or an older .doc file renamed.")
   }
   const files = new Map(Object.entries(entries))

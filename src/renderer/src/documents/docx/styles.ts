@@ -222,11 +222,15 @@ export function applyParagraphProps(props: ParagraphProps, pPr: Element | null):
   return props
 }
 
-const quote = (font: string) => `"${font.replace(/["\\]/g, '')}"`
+// A font name comes from the document, so only characters a font's name needs
+// survive. Anything else, such as a line break, could end the CSS string and
+// add rules of the document's own, like a background that loads from the web.
+export const safeFontName = (font: string) => font.replace(/[^\p{L}\p{N} _.&+-]/gu, '').trim()
 
 export function runCss(props: RunProps): string {
   const rules: string[] = []
-  if (props.font) rules.push(`font-family: ${quote(props.font)}, var(--docx-fallback-font)`)
+  const font = props.font ? safeFontName(props.font) : ''
+  if (font) rules.push(`font-family: "${font}", var(--docx-fallback-font)`)
   if (props.size) rules.push(`font-size: ${props.size}pt`)
   if (props.color) rules.push(`color: ${props.color}`)
   if (props.bold !== undefined) rules.push(`font-weight: ${props.bold ? 700 : 400}`)
