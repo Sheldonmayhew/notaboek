@@ -3,7 +3,7 @@ import { NodeSelection, Selection, TextSelection } from '@tiptap/pm/state'
 import { Copy, GripVertical, Plus, Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState, type DragEvent, type MouseEvent, type RefObject } from 'react'
 import { Popover } from '../components/Popover'
-import { CONVERTIBLE_BLOCKS, convertSelection } from './blockTypes'
+import { convertSelection, convertibleBlocks } from './blockTypes'
 
 const LIST_ITEMS = new Set(['listItem', 'taskItem'])
 const FIXED_BLOCKS = new Set(['horizontalRule', 'table', 'rawBlock'])
@@ -170,7 +170,7 @@ export function BlockHandle({ editor, scroller, container }: BlockHandleProps) {
 
   const turnInto = (id: string) => {
     const node = targetNode()
-    const block = CONVERTIBLE_BLOCKS.find((candidate) => candidate.id === id)
+    const block = convertibleBlocks(editor).find((candidate) => candidate.id === id)
     if (!target || !node || !block) return
     const { state, view } = editor
 
@@ -244,7 +244,7 @@ export function BlockHandle({ editor, scroller, container }: BlockHandleProps) {
           {canTurnInto && (
             <>
               <div className="menu-label">Turn into</div>
-              {CONVERTIBLE_BLOCKS.map((block) => {
+              {convertibleBlocks(editor).map((block) => {
                 const Icon = block.icon
                 return (
                   <button key={block.id} type="button" className="menu-item" onClick={() => turnInto(block.id)}>

@@ -16,7 +16,7 @@ import {
 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type FormEvent } from 'react'
 import { Popover } from '../components/Popover'
-import { CONVERTIBLE_BLOCKS, activeBlockTitle, convertSelection } from './blockTypes'
+import { activeBlockTitle, convertSelection, convertibleBlocks } from './blockTypes'
 import {
   HIGHLIGHTS,
   chooseHighlighter,
@@ -308,7 +308,7 @@ export function BubbleToolbar({ editor, plainText }: BubbleToolbarProps) {
       {turnOpen && turnButton.current && (
         <Popover anchor={turnButton.current} takeFocus={false} onClose={() => setTurnOpen(false)}>
           <div className="menu-label">Turn into</div>
-          {CONVERTIBLE_BLOCKS.map((block) => {
+          {convertibleBlocks(editor).map((block) => {
             const Icon = block.icon
             return (
               <button

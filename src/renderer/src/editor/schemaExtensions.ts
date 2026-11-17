@@ -1,4 +1,4 @@
-import { Extension, mergeAttributes, type Editor } from '@tiptap/core'
+import { Extension, Node, mergeAttributes, type Editor } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
 import Code from '@tiptap/extension-code'
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight'
@@ -98,6 +98,11 @@ const LocalImage = Image.extend({
 const CombinableCode = Code.extend({ excludes: '' })
 
 const LabelledCodeBlock = CodeBlockLowlight.extend({
+  addAttributes() {
+    // The whole first line, when there's more to it than the language.
+    return { ...this.parent?.(), info: { default: null, rendered: false } }
+  },
+
   renderHTML({ node, HTMLAttributes }) {
     const { language } = node.attrs
     return [
@@ -128,15 +133,24 @@ const ListStyle = Extension.create({
             renderHTML: (attrs: { piece?: string | null }) => (attrs.piece ? { 'data-piece': attrs.piece } : {})
           }
         }
-      }
+      },
+      // How many tabs a TaskPaper line had, so rewriting it keeps it under the same parent.
+      { types: ['paragraph', 'taskList'], attributes: { indent: { default: null, rendered: false } } },
+      // A finished TaskPaper task's @done tag, so its date survives editing the task.
+      { types: ['taskItem'], attributes: { done: { default: null, rendered: false, keepOnSplit: false } } }
     ]
   }
 })
 
+// A .csv or .tsv page is a single table, with nowhere to type outside it.
+const TableDocument = Node.create({ name: 'doc', topNode: true, content: 'table' })
+
 // Every extension that contributes to the document schema. The parser and the
 // live editor share this list, so a parsed file always fits the editor.
-export const schemaExtensions = [
+const makeSchemaExtensions = (tableOnly: boolean) => [
+  ...(tableOnly ? [TableDocument] : []),
   StarterKit.configure({
+    document: tableOnly ? false : undefined,
     code: false,
     codeBlock: false,
     underline: false, // no Markdown equivalent
@@ -163,3 +177,7 @@ export const schemaExtensions = [
   RawInline,
   ListStyle
 ]
+
+export const schemaExtensions = makeSchemaExtensions(false)
+
+export const tableSchemaExtensions = makeSchemaExtensions(true)

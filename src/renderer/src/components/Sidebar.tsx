@@ -3,7 +3,6 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsUpDown,
-  File,
   FileText,
   Folder,
   FolderInput,
@@ -29,7 +28,7 @@ import {
   type PointerEvent
 } from 'react'
 import type { SyncStatus, TreeEntry } from '../../../shared/api'
-import { api, baseName, dirName, isInside, samePath, stripExtension } from '../platform'
+import { api, baseName, dirName, isInside, pageIcon, samePath, shownExtension, stripExtension } from '../platform'
 import type { Reveal } from '../tabs'
 import { AccountRow } from './AccountRow'
 import { Popover } from './Popover'
@@ -150,8 +149,8 @@ function Tree(props: TreeProps) {
       {entries.map((entry) => {
         const isFolder = entry.kind === 'folder'
         const open = isFolder && expanded.has(entry.path)
-        const isText = /\.txt$/i.test(entry.name)
-        const Icon = isFolder ? (open ? FolderOpen : Folder) : isText ? File : FileText
+        const badge = isFolder ? '' : shownExtension(entry.name)
+        const Icon = isFolder ? (open ? FolderOpen : Folder) : pageIcon(entry.name)
         const isActive = samePath(entry.path, activePath)
         const isSelected = selected.has(entry.path)
 
@@ -208,7 +207,7 @@ function Tree(props: TreeProps) {
               ) : (
                 <span className="tree-name">
                   {isFolder ? entry.name : stripExtension(entry.name)}
-                  {isText && <span className="tree-ext">.txt</span>}
+                  {badge && <span className="tree-ext">{badge}</span>}
                 </span>
               )}
               <span className="tree-actions">

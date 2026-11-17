@@ -1,7 +1,6 @@
-import { File, FileText } from 'lucide-react'
 import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
 import type { SearchLine, SearchResults as Results } from '../../../shared/api'
-import { api, baseName, friendlyError, relativeTo, stripExtension } from '../platform'
+import { api, baseName, friendlyError, pageIcon, relativeTo, stripExtension } from '../platform'
 
 const SEARCH_DELAY = 180
 
@@ -76,7 +75,7 @@ export function SearchResults({ workspace, query, matchCase, version, onOpen }: 
         {summary}
       </div>
       {hits.map((hit) => {
-        const Icon = /\.txt$/i.test(hit.path) ? File : FileText
+        const Icon = pageIcon(hit.path)
         const folder = relativeTo(workspace, hit.path).split(/[\\/]/).slice(0, -1).join(' / ')
         const hidden = hit.total - hit.lines.length
         return (

@@ -1,8 +1,10 @@
 import { Extension, InputRule, type Editor } from '@tiptap/core'
 import { Placeholder } from '@tiptap/extensions'
-import { Selection, TextSelection } from '@tiptap/pm/state'
+import type { Node as PMNode } from '@tiptap/pm/model'
+import { Plugin, Selection, TextSelection } from '@tiptap/pm/state'
+import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import { FindInPage } from './FindInPage'
-import { schemaExtensions } from './schemaExtensions'
+import { schemaExtensions, tableSchemaExtensions } from './schemaExtensions'
 import { SlashCommand } from './SlashCommand'
 import { MarkdownTableShape } from './tableActions'
 
@@ -102,6 +104,64 @@ const PlainTextKeys = Extension.create({
 
 export const plainTextExtensions = [PlainTextKeys]
 
+// In TaskPaper, "- " starts a task rather than a bullet.
+const TaskPaperDash = Extension.create({
+  name: 'taskPaperDash',
+
+  addInputRules() {
+    return [
+      new InputRule({
+        find: /^-\s$/,
+        handler: ({ range, chain }) => {
+          chain().deleteRange(range).toggleTaskList().run()
+        }
+      })
+    ]
+  }
+})
+
+const TAG = /(^|\s)(@[^\s()@]+(?:\([^)]*\))?)/g
+// Drawn on every change, which a TaskPaper file is far too small to notice.
+const MAX_TAGGED_SIZE = 256 * 1024
+
+function drawTags(doc: PMNode): DecorationSet {
+  if (doc.content.size > MAX_TAGGED_SIZE) return DecorationSet.empty
+  const decorations: Decoration[] = []
+  doc.descendants((node, pos) => {
+    if (!node.isText) return
+    for (const match of (node.text ?? '').matchAll(TAG)) {
+      const from = pos + (match.index ?? 0) + match[1].length
+      decorations.push(Decoration.inline(from, from + match[2].length, { class: 'tag' }))
+    }
+  })
+  return DecorationSet.create(doc, decorations)
+}
+
+// @tags, like @today or @due(2026-12-01), stand out as they do in TaskPaper.
+const TaskPaperTags = Extension.create({
+  name: 'taskPaperTags',
+
+  addProseMirrorPlugins() {
+    return [
+      new Plugin<DecorationSet>({
+        state: {
+          init: (_config, { doc }) => drawTags(doc),
+          apply: (tr, tags) => (tr.docChanged ? drawTags(tr.doc) : tags)
+        },
+        props: {
+          decorations(state) {
+            return this.getState(state)
+          }
+        }
+      })
+    ]
+  }
+})
+
+export const taskPaperExtensions = [PlainTextKeys, TaskPaperDash, TaskPaperTags]
+
+export const taskPaperInputRules = ['taskList', 'taskItem', 'quickTodo', 'taskPaperDash']
+
 // Block shortcuts only: `**` and friends stay as typed in a .txt file.
 export const plainTextInputRules = [
   'heading',
@@ -141,3 +201,6 @@ export const editorExtensions = [
   // Last, so the slash menu sees Tab and Enter before EditingKeys does.
   SlashCommand
 ]
+
+// A .csv or .tsv page: one table of plain text, with no blocks to add.
+export const tableEditorExtensions = [...tableSchemaExtensions, EditingKeys, MarkdownTableShape, FindInPage, PlainTextKeys]

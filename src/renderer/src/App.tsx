@@ -1,15 +1,18 @@
 import type { Editor } from '@tiptap/react'
 import { FilePlus2 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
-import type { FileSnapshot, Opened, SyncStatus } from '../../shared/api'
+import type { BinarySnapshot, FileSnapshot, Opened, SyncStatus } from '../../shared/api'
+import { OPENABLE_FILE, documentKindOf } from '../../shared/fileTypes'
 import { AccountDialog } from './components/AccountDialog'
+import { DocumentView } from './components/DocumentView'
 import { PageView } from './components/PageView'
 import { Sidebar } from './components/Sidebar'
 import { TabBar } from './components/TabBar'
 import { Topbar } from './components/Topbar'
 import { Welcome } from './components/Welcome'
 import { flavorOf, parseDocument, type LoadedDocument } from './doc/document'
-import { SaveSession } from './doc/saveSession'
+import { DocumentSession } from './doc/documentSession'
+import { SaveSession, type SaveStatus } from './doc/saveSession'
 import {
   api,
   baseName,
@@ -106,29 +109,66 @@ export function App() {
     [tabById, writeTabs]
   )
 
+  const reportStatus = useCallback(
+    (id: number) => (next: SaveStatus, message?: string) => {
+      const saveError = next === 'error' ? friendlyError(message ?? 'The file could not be saved.') : null
+      patchTab(id, { status: next, saveError })
+      if (id === activeTabId.current) setErrorText(null)
+    },
+    [patchTab]
+  )
+
   const showPage = useCallback(
     (id: number, snapshot: FileSnapshot, focus: OpenPage['focus'] = null, reveal: Reveal | null = null) => {
       const tab = tabById(id)
       if (!tab) return
       const loaded = parseDocument(snapshot.text, flavorOf(snapshot.path))
       tab.live.session?.dispose()
-      tab.live.session = new SaveSession(snapshot, (next, message) => {
-        const saveError = next === 'error' ? friendlyError(message ?? 'The file could not be saved.') : null
-        patchTab(id, { status: next, saveError })
-        if (id === activeTabId.current) setErrorText(null)
-      })
+      tab.live.session = new SaveSession(snapshot, reportStatus(id))
       tab.live.editor = null
       tab.live.source = null
       patchTab(id, {
         path: snapshot.path,
         page: { id: nextPageId++, loaded, focus, reveal },
+        document: null,
         status: 'saved',
         saveError: null,
         sourceText: null,
         hasTitleBlock: startsWithTitle(null, loaded)
       })
     },
-    [tabById, patchTab]
+    [tabById, patchTab, reportStatus]
+  )
+
+  const showDocument = useCallback(
+    (id: number, snapshot: BinarySnapshot) => {
+      const tab = tabById(id)
+      const kind = documentKindOf(snapshot.path)
+      if (!tab || !kind) return
+      tab.live.session?.dispose()
+      tab.live.session = new DocumentSession(snapshot, reportStatus(id))
+      tab.live.editor = null
+      tab.live.source = null
+      patchTab(id, {
+        path: snapshot.path,
+        page: null,
+        document: { id: nextPageId++, kind, snapshot },
+        status: 'saved',
+        saveError: null,
+        sourceText: null,
+        hasTitleBlock: false
+      })
+    },
+    [tabById, patchTab, reportStatus]
+  )
+
+  // Reads the file again into its tab, whichever kind it is.
+  const showFromDisk = useCallback(
+    async (id: number, path: string) => {
+      if (documentKindOf(path)) showDocument(id, await api.readBinary(path))
+      else showPage(id, await api.readFile(path))
+    },
+    [showDocument, showPage]
   )
 
   // Nothing may replace a page while its text exists only in the window.
@@ -150,22 +190,24 @@ export function App() {
       const request = ++tab.live.requests
       if (!(await canLeave(tab))) return
       try {
-        const snapshot = await api.readFile(path)
+        const snapshot = documentKindOf(path) ? await api.readBinary(path) : await api.readFile(path)
         // A later click wins, however these reads finish.
         if (request !== tab.live.requests) return
         // Anything typed during that read still has to be saved first.
         if (!(await canLeave(tab))) return
         if (request !== tab.live.requests) return
-        showPage(id, snapshot, focus, reveal)
+        if ('bytes' in snapshot) showDocument(id, snapshot)
+        else showPage(id, snapshot, focus, reveal)
         setErrorText(null)
       } catch (error) {
         if (request !== tab.live.requests) return
         setErrorText(friendlyError(error))
         // A tab that never got its page has nothing to show.
-        if (!tabById(id)?.page) dropTab.current(id)
+        const shown = tabById(id)
+        if (!shown?.page && !shown?.document) dropTab.current(id)
       }
     },
-    [tabById, canLeave, showPage]
+    [tabById, canLeave, showPage, showDocument]
   )
 
   const showTab = useCallback(
@@ -174,7 +216,7 @@ export function App() {
       setActiveId(id)
       const tab = tabById(id)
       // Reopened tabs aren't read until they're first looked at.
-      if (tab?.path && !tab.page && tab.live.requests === 0) void loadPage(id, tab.path)
+      if (tab?.path && !tab.page && !tab.document && tab.live.requests === 0) void loadPage(id, tab.path)
     },
     [tabById, loadPage]
   )
@@ -221,7 +263,7 @@ export function App() {
     async (path: string, { focus = null, reveal = null, newTab = false }: OpenOptions = {}) => {
       const open = tabList.current.find((tab) => samePath(tab.path, path))
       if (open) {
-        const loading = open.page ? null : loadPage(open.id, path, focus, reveal)
+        const loading = open.page || open.document ? null : loadPage(open.id, path, focus, reveal)
         showTab(open.id)
         if (reveal && open.page) patchTab(open.id, { page: { ...open.page, reveal } })
         await loading
@@ -307,8 +349,9 @@ export function App() {
 
   const active = tabs.find((tab) => tab.id === activeId) ?? null
   const page = active?.page ?? null
+  const shownDocument = active?.document ?? null
   const activePath = active?.path ?? null
-  const shownPath = page ? activePath : null
+  const shownPath = page || shownDocument ? activePath : null
 
   useEffect(() => {
     document.title = shownPath ? `${stripExtension(baseName(shownPath))} - Notaboek` : 'Notaboek'
@@ -331,6 +374,18 @@ export function App() {
       const current = tab.live.session
       if (!current) return
       const { path } = current
+      if (current instanceof DocumentSession) {
+        const state = await current.checkDisk().catch(() => 'same' as const)
+        if (tab.live.session !== current || current.path !== path || state === 'same') return
+        if (state === 'missing') {
+          if (!moving.current) current.markChangedOnDisk('missing')
+        } else if (current.hasUnsavedChanges()) {
+          current.markChangedOnDisk('conflict')
+        } else {
+          await showFromDisk(tab.id, path).catch(() => undefined)
+        }
+        return
+      }
       try {
         const snapshot = await api.readFile(path)
         if (tab.live.session !== current || current.matchesDisk(snapshot)) return
@@ -346,7 +401,7 @@ export function App() {
         }
       }
     },
-    [showPage]
+    [showPage, showFromDisk]
   )
 
   // Outside changes: refresh the tree, and reload open pages where it is safe to.
@@ -366,12 +421,12 @@ export function App() {
     if (!tab || !current) return
     tab.live.requests++
     try {
-      showPage(tab.id, await api.readFile(current.path))
+      await showFromDisk(tab.id, current.path)
     } catch {
       dropTab.current(tab.id)
     }
     setErrorText(null)
-  }, [activeTab, showPage])
+  }, [activeTab, showFromDisk])
 
   const closeTab = useCallback(
     async (id: number) => {
@@ -606,7 +661,7 @@ export function App() {
       const from = activeTab()?.path
       if (/^(https?:|mailto:)/i.test(href)) {
         api.openExternal(href)
-      } else if (from && /\.(md|markdown|mdown|mkd|txt)(#.*)?$/i.test(href)) {
+      } else if (from && OPENABLE_FILE.test(href.replace(/#.*$/, ''))) {
         void openPage(resolveRelative(dirName(from), href.replace(/#.*$/, '')))
       }
     },
@@ -616,7 +671,7 @@ export function App() {
   const toggleSource = useCallback(async () => {
     const tab = activeTab()
     const current = tab?.live.session
-    if (!tab || !current || !tab.page) return
+    if (!tab || !(current instanceof SaveSession) || !tab.page) return
     await current.flush()
     if (tab.live.source === null) {
       // A textarea turns every line ending into \n and would let the byte order
@@ -853,6 +908,7 @@ export function App() {
         <Topbar
           workspace={workspace}
           path={shownPath}
+          kind={shownDocument?.kind ?? 'page'}
           status={status}
           prefs={prefs}
           sourceMode={active?.sourceText != null}
@@ -940,7 +996,7 @@ export function App() {
           </div>
         )}
 
-        {!page && (
+        {!page && !shownDocument && (
           <div className="tab-view">
             <div className="scroller">
               {!activePath && (
@@ -958,6 +1014,27 @@ export function App() {
 
         {tabs.map(
           (tab) =>
+            tab.document &&
+            tab.path && (
+              <DocumentView
+                key={tab.document.id}
+                document={tab.document}
+                active={tab.id === activeId}
+                view={tab.live.view}
+                onWriter={(writer) => {
+                  if (tab.live.session instanceof DocumentSession) tab.live.session.setWriter(writer)
+                }}
+                onEditor={(instance) => {
+                  tab.live.editor = instance
+                }}
+                onEdit={() => tab.live.session?.touch()}
+                onError={setErrorText}
+              />
+            )
+        )}
+
+        {tabs.map(
+          (tab) =>
             tab.page &&
             tab.path && (
               <PageView
@@ -969,7 +1046,7 @@ export function App() {
                 view={tab.live.view}
                 onReady={(instance, text) => {
                   tab.live.editor = instance
-                  tab.live.session?.setSource(text)
+                  if (tab.live.session instanceof SaveSession) tab.live.session.setSource(text)
                 }}
                 onChange={(instance) => {
                   if (tab.page) patchTab(tab.id, { hasTitleBlock: startsWithTitle(instance, tab.page.loaded) })

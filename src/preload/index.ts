@@ -33,6 +33,11 @@ const api: NotaboekApi = {
     ipcRenderer.invoke('fs:write', path, text, encoding, expectedMtime),
   writeFileSync: (path, text, encoding, expectedMtime) =>
     ipcRenderer.sendSync('fs:write-now', path, text, encoding, expectedMtime),
+  readBinary: (path) => ipcRenderer.invoke('fs:read-binary', path),
+  modifiedTime: (path) => ipcRenderer.invoke('fs:mtime', path),
+  writeBinary: (path, bytes, expectedMtime) => ipcRenderer.invoke('fs:write-binary', path, bytes, expectedMtime),
+  writeBinarySync: (path, bytes, expectedMtime) =>
+    ipcRenderer.sendSync('fs:write-binary-now', path, bytes, expectedMtime),
   createFile: (dir, name) => ipcRenderer.invoke('fs:create', dir, name),
   rename: (path, name) => ipcRenderer.invoke('fs:rename', path, name),
   move: (paths, dir) => ipcRenderer.invoke('fs:move', paths, dir),
@@ -48,7 +53,7 @@ const api: NotaboekApi = {
   toggleFullScreen: () => ipcRenderer.send('window:fullscreen'),
   zoom: (direction) => ipcRenderer.send('window:zoom', direction),
   onFileWaiting: (listener) => subscribe<[]>('file:waiting', listener),
-  noteTableContext: (inTable) => void ipcRenderer.sendSync('context:table', inTable),
+  noteTableContext: (inTable, wholeFile = false) => void ipcRenderer.sendSync('context:table', inTable, wholeFile),
   onTableAction: (listener) => subscribe<[TableAction]>('table:action', listener),
   onFilesChanged: (listener) => subscribe<[]>('files:changed', listener)
 }

@@ -284,6 +284,27 @@ const api: NotaboekApi = {
     }
   },
 
+  // PDFs and Word documents stay on the desktop: they aren't synced, so the web
+  // app never lists one. These are here for the shape of the API.
+  async readBinary(path) {
+    const relative = toRelative(path)
+    const file = await browserDrive.stat(relative)
+    if (!file) throw new Error('ENOENT')
+    return { path, bytes: await browserDrive.read(relative), mtime: file.modified }
+  },
+
+  async modifiedTime(path) {
+    return (await browserDrive.stat(toRelative(path)))?.modified ?? null
+  },
+
+  async writeBinary() {
+    return { ok: false, reason: 'error', message: 'Documents can only be changed in the desktop app.' }
+  },
+
+  writeBinarySync() {
+    return false
+  },
+
   async createFile(dir, name) {
     const folder = dir === ROOT ? '' : toRelative(dir)
     const relative = await freeName(folder, name)

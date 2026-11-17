@@ -2,7 +2,8 @@ import MarkdownIt, { type StateCore, type StateInline, type Token } from 'markdo
 import { CALLOUT_KINDS } from '../editor/Callout'
 import { DEFAULT_HIGHLIGHT, highlightOfHex, type HighlightColor } from '../editor/Highlight'
 
-export type Flavor = 'md' | 'txt'
+// The two ways Notaboek reads text: as Markdown, or as plain text with light structure.
+export type Markup = 'md' | 'txt'
 
 const TASK_MARKER = /^\[([ xX])\](?:\s+|$)/
 const CALLOUT_MARKER = new RegExp(`^\\[!(${CALLOUT_KINDS.join('|')})\\][ \\t]*(?:\\n|$)`, 'i')
@@ -103,7 +104,7 @@ function blockRule(state: StateCore): void {
 
 // A single newline in Markdown is a space, so files wrapped at 80 columns flow
 // to the width of the page. In a .txt file line breaks are deliberate and stay.
-function softBreakRule(flavor: Flavor) {
+function softBreakRule(flavor: Markup) {
   return (state: StateCore): void => {
     for (const token of state.tokens) {
       for (const child of token.children ?? []) {
@@ -275,7 +276,7 @@ function literalNewline(state: StateInline, silent: boolean): boolean {
   return true
 }
 
-export function createTokenizer(flavor: Flavor) {
+export function createTokenizer(flavor: Markup) {
   const md = new MarkdownIt({ html: flavor === 'md', linkify: true })
   md.linkify.set({ fuzzyLink: false, fuzzyEmail: false })
 

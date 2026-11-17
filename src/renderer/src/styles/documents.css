@@ -1,0 +1,378 @@
+/* PDFs and Word documents. Both show the paper as it is, so the sheet stays white
+   in the dark theme too, on a backdrop that follows it. */
+
+.document-view {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  outline: none;
+}
+
+.document-toolbar {
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  min-height: 42px;
+  padding: 5px 12px;
+  user-select: none;
+}
+
+.tool-group {
+  align-items: center;
+  display: flex;
+  gap: 2px;
+}
+
+.tool-spacer {
+  flex: 1;
+}
+
+.tool-button {
+  align-items: center;
+  border-radius: 6px;
+  color: var(--text-2);
+  display: flex;
+  gap: 6px;
+  height: 30px;
+  justify-content: center;
+  min-width: 30px;
+  padding: 0 7px;
+  white-space: nowrap;
+}
+
+.tool-button:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.tool-button[aria-pressed='true'] {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+}
+
+.tool-button:disabled {
+  color: var(--text-3);
+  cursor: default;
+}
+
+.tool-button span {
+  font-size: 13px;
+}
+
+.zoom-level {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  min-width: 52px;
+}
+
+.tool-select {
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  height: 30px;
+  max-width: 180px;
+  padding: 0 6px;
+}
+
+.color-swatch {
+  background: var(--swatch);
+  border: 2px solid var(--bg);
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px var(--border-strong);
+  height: 22px;
+  margin: 0 2px;
+  width: 22px;
+}
+
+.color-swatch[aria-checked='true'] {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.document-note {
+  align-items: center;
+  color: var(--text-2);
+  display: flex;
+  font-size: 13px;
+  gap: 6px;
+  padding: 0 4px;
+}
+
+.document-scroller {
+  background: var(--bg-sidebar);
+  overflow-x: auto;
+}
+
+/* PDF */
+
+.pdf-pages {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 100%;
+  padding: 24px;
+  width: max-content;
+}
+
+.pdf-page {
+  --scale-round-x: 1px;
+  --scale-round-y: 1px;
+  --user-unit: 1;
+  background: #ffffff;
+  box-shadow: 0 0 0 1px rgba(15, 15, 15, 0.06), 0 2px 8px rgba(15, 15, 15, 0.12);
+  flex: none;
+  position: relative;
+}
+
+.pdf-canvas,
+.pdf-text {
+  inset: 0;
+  position: absolute;
+}
+
+.pdf-canvas canvas {
+  display: block;
+  height: 100%;
+  width: 100%;
+}
+
+.pdf-marks {
+  left: 0;
+  mix-blend-mode: multiply;
+  pointer-events: none;
+  position: absolute;
+  top: 0;
+}
+
+.pdf-selected {
+  border: 1.5px dashed var(--accent);
+  border-radius: 4px;
+  pointer-events: none;
+  position: absolute;
+}
+
+.pdf-view[data-tool='circle'] .pdf-page,
+.pdf-view[data-tool='highlight'] .pdf-page {
+  cursor: crosshair;
+}
+
+.pdf-view[data-tool='circle'] .textLayer {
+  pointer-events: none;
+}
+
+/* pdf.js lays transparent text over the drawing so it can be selected. These are
+   its own rules, from pdf_viewer.css. */
+.textLayer {
+  color-scheme: only light;
+  forced-color-adjust: none;
+  inset: 0;
+  letter-spacing: normal;
+  line-height: 1;
+  opacity: 1;
+  overflow: clip;
+  position: absolute;
+  text-align: initial;
+  text-size-adjust: none;
+  transform-origin: 0 0;
+  word-spacing: normal;
+  z-index: 0;
+
+  --min-font-size: 1;
+  --text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size));
+  --min-font-size-inv: calc(1 / var(--min-font-size));
+}
+
+.textLayer :is(span, br) {
+  color: transparent;
+  cursor: text;
+  position: absolute;
+  transform-origin: 0% 0%;
+  user-select: text;
+  white-space: pre;
+}
+
+.textLayer > :not(.markedContent),
+.textLayer .markedContent span:not(.markedContent) {
+  --font-height: 0;
+  --scale-x: 1;
+  --rotate: 0deg;
+  font-size: calc(var(--text-scale-factor) * var(--font-height));
+  transform: rotate(var(--rotate)) scaleX(var(--scale-x)) scale(var(--min-font-size-inv));
+  z-index: 1;
+}
+
+.textLayer .markedContent {
+  display: contents;
+}
+
+.textLayer span[role='img'] {
+  cursor: default;
+  user-select: none;
+}
+
+.textLayer ::selection {
+  background: color-mix(in srgb, var(--accent) 35%, transparent);
+  color: transparent;
+}
+
+.textLayer br::selection {
+  background: transparent;
+}
+
+.textLayer .endOfContent {
+  cursor: default;
+  display: block;
+  inset: 100% 0 0;
+  position: absolute;
+  user-select: none;
+  z-index: 0;
+}
+
+.textLayer.selecting .endOfContent {
+  top: 0;
+}
+
+.pdf-page [data-main-rotation='90'] {
+  transform: rotate(90deg) translateY(-100%);
+}
+
+.pdf-page [data-main-rotation='180'] {
+  transform: rotate(180deg) translate(-100%, -100%);
+}
+
+.pdf-page [data-main-rotation='270'] {
+  transform: rotate(270deg) translateX(-100%);
+}
+
+/* Word */
+
+.docx-sheet {
+  --docx-fallback-font: Calibri, Carlito, Arial, sans-serif;
+  background: #ffffff;
+  box-shadow: 0 0 0 1px rgba(15, 15, 15, 0.06), 0 2px 8px rgba(15, 15, 15, 0.12);
+  box-sizing: border-box;
+  color: #000000;
+  color-scheme: only light;
+  font-family: var(--docx-fallback-font);
+  font-size: 10pt;
+  line-height: 1.15;
+  margin: 24px auto 48px;
+  max-width: none;
+  min-height: 400px;
+  /* Word's default tab stops are half an inch apart. */
+  tab-size: 48px;
+}
+
+.docx-content {
+  outline: none;
+  overflow-wrap: break-word;
+  white-space: pre-wrap;
+}
+
+.docx-content ::selection {
+  background: color-mix(in srgb, #2383e2 30%, transparent);
+}
+
+.docx-p {
+  margin: 0;
+  min-height: 1lh;
+}
+
+/* Set from the paragraph's own style attribute, so only !important outweighs it. */
+.docx-p.docx-tight-before {
+  padding-top: 0 !important;
+}
+
+.docx-p.docx-tight-after {
+  padding-bottom: 0 !important;
+}
+
+.docx-content strong {
+  font-weight: 700;
+}
+
+.docx-content em {
+  font-style: italic;
+}
+
+.docx-content u {
+  text-decoration-line: underline;
+}
+
+.docx-content s {
+  text-decoration-line: line-through;
+}
+
+.docx-link {
+  color: #0563c1;
+  cursor: text;
+  text-decoration: underline;
+}
+
+.docx-marker {
+  display: inline-block;
+  text-align: left;
+  text-indent: 0;
+  user-select: none;
+  white-space: pre;
+}
+
+.docx-table {
+  border-collapse: collapse;
+  margin: 0;
+}
+
+.docx-table td {
+  padding: 0 7px;
+  vertical-align: top;
+}
+
+.docx-table[data-borders='true'] > tbody > tr > td {
+  border: 1px solid #000000;
+}
+
+.docx-locked {
+  border-radius: 2px;
+  cursor: default;
+  user-select: none;
+}
+
+.docx-locked:hover {
+  outline: 1px dashed rgba(0, 0, 0, 0.22);
+  outline-offset: 2px;
+}
+
+.docx-locked.ProseMirror-selectednode {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.docx-hidden {
+  height: 0;
+  overflow: hidden;
+}
+
+.docx-picture {
+  max-width: 100%;
+  height: auto;
+  vertical-align: bottom;
+}
+
+.docx-picture-missing {
+  align-items: center;
+  background: #f1f1ef;
+  color: #787774;
+  display: inline-flex;
+  font: 12px var(--font-sans);
+  justify-content: center;
+  max-width: 100%;
+  min-height: 24px;
+  min-width: 80px;
+}

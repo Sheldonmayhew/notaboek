@@ -1,6 +1,8 @@
 import { constants, cpSync, existsSync, promises as fs, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import type {
+  BinarySaveResult,
+  BinarySnapshot,
   FileSnapshot,
   MoveResult,
   SaveResult,
@@ -10,15 +12,17 @@ import type {
   TreeEntry
 } from '../shared/api'
 import { decodeText, encodeText } from '../shared/encoding'
+import { DOCUMENT_FILE, PAGE_FILE } from '../shared/fileTypes'
 import { MAX_SEARCH_HITS, searchPage } from '../shared/search'
 import type { LocalFile } from '../shared/sync/engine'
 
-export const TEXT_FILE = /\.(md|markdown|mdown|mkd|txt)$/i
+export const TEXT_FILE = PAGE_FILE
 export const IMAGE_FILE = /\.(png|jpe?g|gif|webp|svg|bmp|avif)$/i
 
 const IGNORED = new Set(['node_modules', '$RECYCLE.BIN', 'System Volume Information'])
 const MAX_FILE_BYTES = 8 * 1024 * 1024
 const MAX_IMAGE_BYTES = 25 * 1024 * 1024
+const MAX_DOCUMENT_BYTES = 200 * 1024 * 1024
 const TEMP_SUFFIX = '.notaboek-tmp'
 const RESERVED_NAME = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\.|$)/i
 const FORBIDDEN_NAME_CHARACTERS = /[\\/:*?"<>|]/g
@@ -70,14 +74,17 @@ export async function readDefaultFolder(file: string): Promise<string | null> {
 export const writeDefaultFolder = (file: string, folder: string) =>
   fs.writeFile(file, Buffer.from(`\uFEFF${folder}`, 'utf16le'))
 
+// Word leaves a "~$" owner file beside every document it has open.
 export const isIgnoredName = (name: string) =>
-  name.startsWith('.') || IGNORED.has(name) || name.endsWith(TEMP_SUFFIX)
+  name.startsWith('.') || name.startsWith('~$') || IGNORED.has(name) || name.endsWith(TEMP_SUFFIX)
+
+const isListed = (name: string) => TEXT_FILE.test(name) || DOCUMENT_FILE.test(name)
 
 export async function listDir(dir: string): Promise<TreeEntry[]> {
   const entries = await fs.readdir(dir, { withFileTypes: true })
   const visible = entries
     .filter((entry) => !isIgnoredName(entry.name))
-    .filter((entry) => entry.isDirectory() || (entry.isFile() && TEXT_FILE.test(entry.name)))
+    .filter((entry) => entry.isDirectory() || (entry.isFile() && isListed(entry.name)))
     .map(
       (entry): TreeEntry => ({
         name: entry.name,
@@ -107,7 +114,15 @@ export async function readFile(file: string): Promise<FileSnapshot> {
   return { path: file, text, encoding, mtime: stat.mtimeMs }
 }
 
-async function currentMtime(file: string): Promise<number | null> {
+export async function readBinary(file: string): Promise<BinarySnapshot> {
+  const stat = await fs.stat(file)
+  if (stat.size > MAX_DOCUMENT_BYTES) {
+    throw new Error('This document is too large to open (the limit is 200 MB).')
+  }
+  return { path: file, bytes: new Uint8Array(await fs.readFile(file)), mtime: stat.mtimeMs }
+}
+
+export async function currentMtime(file: string): Promise<number | null> {
   try {
     return (await fs.stat(file)).mtimeMs
   } catch (error) {
@@ -189,12 +204,7 @@ function inOrder<T>(operation: () => Promise<T>): Promise<T> {
 
 const ownWrites = new Map<string, number>()
 
-export function writeFile(
-  file: string,
-  text: string,
-  encoding: TextEncodingName,
-  expectedMtime: number | null
-): Promise<SaveResult> {
+function writeBytes(file: string, buffer: () => Buffer, expectedMtime: number | null): Promise<BinarySaveResult> {
   return inOrder(async () => {
     try {
       if (expectedMtime !== null) {
@@ -205,32 +215,54 @@ export function writeFile(
         // Keeping a page whose folder was deleted has to bring the folder back.
         await fs.mkdir(path.dirname(file), { recursive: true })
       }
-      const encoded = encode(text, encoding)
-      await replaceFile(file, encoded.buffer)
+      await replaceFile(file, buffer())
       const mtime = (await fs.stat(file)).mtimeMs
       ownWrites.set(file, mtime)
-      return { ok: true, mtime, encoding: encoded.encoding }
+      return { ok: true, mtime }
     } catch (error) {
       return { ok: false, reason: 'error', message: (error as Error).message }
     }
   })
 }
 
-// The last write while the window closes. It waits behind any save still running,
-// whose new timestamp the page hasn't heard about yet, so that counts as expected.
-export function writeOnClose(
+export async function writeFile(
   file: string,
   text: string,
   encoding: TextEncodingName,
-  expectedMtime: number
-): Promise<boolean> {
+  expectedMtime: number | null
+): Promise<SaveResult> {
+  let used = encoding
+  const result = await writeBytes(
+    file,
+    () => {
+      const encoded = encode(text, encoding)
+      used = encoded.encoding
+      return encoded.buffer
+    },
+    expectedMtime
+  )
+  return result.ok ? { ...result, encoding: used } : result
+}
+
+export const writeBinary = (file: string, bytes: Uint8Array, expectedMtime: number | null) =>
+  writeBytes(file, () => Buffer.from(bytes), expectedMtime)
+
+// The last write while the window closes. It waits behind any save still running,
+// whose new timestamp the page hasn't heard about yet, so that counts as expected.
+function writeBytesOnClose(file: string, buffer: () => Buffer, expectedMtime: number): Promise<boolean> {
   return inOrder(async () => {
     const onDisk = await currentMtime(file)
     if (onDisk === null || (onDisk !== expectedMtime && onDisk !== ownWrites.get(file))) return false
-    await replaceFile(file, encode(text, encoding).buffer)
+    await replaceFile(file, buffer())
     return true
   })
 }
+
+export const writeOnClose = (file: string, text: string, encoding: TextEncodingName, expectedMtime: number) =>
+  writeBytesOnClose(file, () => encode(text, encoding).buffer, expectedMtime)
+
+export const writeBinaryOnClose = (file: string, bytes: Uint8Array, expectedMtime: number) =>
+  writeBytesOnClose(file, () => Buffer.from(bytes), expectedMtime)
 
 // `write` has to fail if the file exists, so two writes can never share a name.
 async function writeUnique(dir: string, name: string, write: (file: string) => Promise<void>): Promise<string> {
@@ -305,6 +337,7 @@ export async function searchFolder(
         await walk(entry.path)
         continue
       }
+      if (!TEXT_FILE.test(entry.name)) continue
       const hit = await searchFile(entry.path, query, options)
       if (!hit) continue
       if (results.hits.length >= MAX_SEARCH_HITS) results.truncated = true

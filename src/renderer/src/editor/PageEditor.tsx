@@ -2,13 +2,23 @@ import { Fragment, Slice } from '@tiptap/pm/model'
 import { isInTable } from '@tiptap/pm/tables'
 import { EditorContent, useEditor, type Editor, type EditorOptions } from '@tiptap/react'
 import { useEffect, useLayoutEffect, useMemo, useRef, type RefObject } from 'react'
+import { isPlainFlavor, type Flavor } from '../../../shared/fileTypes'
 import type { LoadedDocument } from '../doc/document'
 import { parseMarkup } from '../doc/markdown'
+import { parseTaskPaperFragment } from '../doc/taskpaper'
 import { api } from '../platform'
 import { BlockHandle } from './BlockHandle'
 import { BubbleToolbar } from './BubbleToolbar'
-import { editorExtensions, plainTextExtensions, plainTextInputRules } from './extensions'
+import {
+  editorExtensions,
+  plainTextExtensions,
+  plainTextInputRules,
+  tableEditorExtensions,
+  taskPaperExtensions,
+  taskPaperInputRules
+} from './extensions'
 import { PageImages, setImageFolder } from './images'
+import { PageFlavor } from './pageFlavor'
 import { PageProperties } from './PageProperties'
 import { closeSlashMenu } from './SlashCommand'
 import { runTableAction } from './tableActions'
@@ -34,6 +44,23 @@ function withTrailingParagraph(doc: LoadedDocument['doc']) {
   if (doc.lastChild?.type.name !== 'paragraph') content.content.push({ type: 'paragraph' })
   return content
 }
+
+function extensionsFor(flavor: Flavor, table: boolean, large: boolean) {
+  if (table) return tableEditorExtensions
+  // The placeholder looks through the whole page on every key.
+  const base = editorExtensions.filter((extension) => !large || extension.name !== 'placeholder')
+  if (flavor === 'taskpaper') return [...base, ...taskPaperExtensions]
+  return isPlainFlavor(flavor) ? [...base, ...plainTextExtensions] : base
+}
+
+function inputRulesFor(flavor: Flavor, table: boolean): string[] | true {
+  if (table) return []
+  if (flavor === 'taskpaper') return taskPaperInputRules
+  return isPlainFlavor(flavor) ? plainTextInputRules : true
+}
+
+const parsePasted = (text: string, flavor: Flavor) =>
+  flavor === 'taskpaper' ? parseTaskPaperFragment(text) : parseMarkup(text, flavor === 'md' ? 'md' : 'txt').doc
 
 // Formatting can't be stored in a .txt file, so it shouldn't appear to paste in.
 function withoutFormatting(fragment: Fragment): Fragment {
@@ -66,18 +93,19 @@ export function PageEditor(props: PageEditorProps) {
   const showing = useRef(active)
   showing.current = active
   const assetDirAtStart = useRef(assetDir)
-  const plainText = loaded.flavor === 'txt'
+  const { flavor } = loaded
+  const plainText = isPlainFlavor(flavor)
+  const table = loaded.table !== null
 
   const large = loaded.raw.length > LARGE_PAGE
 
   // Every open tab renders with the window, and a change to any of these makes the
   // editor walk the whole document again.
-  const content = useMemo(() => withTrailingParagraph(loaded.doc), [loaded])
+  const content = useMemo(() => (table ? loaded.doc.toJSON() : withTrailingParagraph(loaded.doc)), [loaded, table])
   const extensions = useMemo(
     () => [
-      // The placeholder looks through the whole page on every key.
-      ...editorExtensions.filter((extension) => !large || extension.name !== 'placeholder'),
-      ...(plainText ? plainTextExtensions : []),
+      ...extensionsFor(flavor, table, large),
+      PageFlavor.configure({ flavor }),
       PageProperties.configure({ frontmatter: loaded.frontmatter }),
       PageImages.configure({
         dir: assetDirAtStart.current,
@@ -86,13 +114,14 @@ export function PageEditor(props: PageEditorProps) {
         onError: (message) => reportImageError.current(message)
       })
     ],
-    [loaded, plainText, large]
+    [loaded, flavor, plainText, table, large]
   )
   const editorProps = useMemo<EditorOptions['editorProps']>(
     () => ({
       attributes: {
         class: 'page-content',
         'aria-label': 'Page content',
+        'data-flavor': flavor,
         // The spellchecker reads the whole page, and a log has little to offer it.
         ...(large ? { spellcheck: 'false' } : {}),
         // One enormous block is always on screen, so there's nothing to skip.
@@ -106,8 +135,13 @@ export function PageEditor(props: PageEditorProps) {
         for (let depth = $context.depth; depth > 0; depth--) {
           if ($context.node(depth).type.spec.tableRole) return literal
         }
-        if (!MARKDOWN_BLOCK.test(text) && !MARKDOWN_INLINE.test(text)) return literal
-        const { doc } = parseMarkup(text.replace(/\r\n?/g, '\n'), loaded.flavor)
+        // Every line of TaskPaper means something, so any copied lines are read as it.
+        const structured =
+          flavor === 'taskpaper'
+            ? /\n|^\s*- /.test(text)
+            : MARKDOWN_BLOCK.test(text) || MARKDOWN_INLINE.test(text)
+        if (!structured) return literal
+        const doc = parsePasted(text.replace(/\r\n?/g, '\n'), flavor)
         return Slice.maxOpen(view.state.schema.nodeFromJSON(doc.toJSON()).content)
       },
       transformPasted(slice) {
@@ -122,12 +156,12 @@ export function PageEditor(props: PageEditorProps) {
         return true
       }
     }),
-    [loaded, plainText, large]
+    [loaded, flavor, plainText, large]
   )
 
   const editor = useEditor({
     extensions,
-    enableInputRules: plainText ? plainTextInputRules : true,
+    enableInputRules: inputRulesFor(flavor, table),
     enablePasteRules: !plainText,
     content,
     shouldRerenderOnTransaction: false,
@@ -168,10 +202,10 @@ export function PageEditor(props: PageEditorProps) {
         // The menu is built by the main process, which can't see what was clicked.
         // The keyboard's menu key opens it at the caret, with no cell to point at.
         contextCell.current = (event.target as Element).closest<HTMLElement>('td, th')
-        api.noteTableContext(contextCell.current !== null || (event.button === 0 && isInTable(editor.state)))
+        api.noteTableContext(contextCell.current !== null || (event.button === 0 && isInTable(editor.state)), table)
       }}
     >
-      <BlockHandle editor={editor} scroller={scroller} container={frame} />
+      {!table && <BlockHandle editor={editor} scroller={scroller} container={frame} />}
       <TableControls editor={editor} scroller={scroller} container={frame} />
       <BubbleToolbar editor={editor} plainText={plainText} />
       <EditorContent editor={editor} />

@@ -3,6 +3,7 @@ import { liftTarget } from '@tiptap/pm/transform'
 import {
   CheckSquare,
   Code2,
+  Folder,
   Heading1,
   Heading2,
   Heading3,
@@ -16,6 +17,7 @@ import {
   Type,
   type LucideIcon
 } from 'lucide-react'
+import { editorFlavor } from './pageFlavor'
 
 export interface BlockType {
   id: string
@@ -155,7 +157,26 @@ export const BLOCK_TYPES: BlockType[] = [
   }
 ]
 
-export const CONVERTIBLE_BLOCKS = BLOCK_TYPES.filter((block) => block.convertible)
+const blockById = (id: string) => BLOCK_TYPES.find((block) => block.id === id) as BlockType
+
+// A TaskPaper file holds only projects, tasks and notes.
+const TASKPAPER_BLOCKS: BlockType[] = [
+  { ...blockById('text'), title: 'Note', keywords: 'text plain paragraph body' },
+  {
+    ...blockById('h2'),
+    id: 'project',
+    title: 'Project',
+    shortcut: undefined,
+    keywords: 'heading section group list',
+    icon: Folder,
+    isActive: (editor) => editor.isActive('heading')
+  },
+  { ...blockById('todo'), title: 'Task', shortcut: '-', keywords: 'to-do todo checkbox check' }
+]
+
+export const blockTypesFor = (editor: Editor) => (editorFlavor(editor) === 'taskpaper' ? TASKPAPER_BLOCKS : BLOCK_TYPES)
+
+export const convertibleBlocks = (editor: Editor) => blockTypesFor(editor).filter((block) => block.convertible)
 
 const LIST_BLOCKS = new Set(['bullet', 'ordered', 'todo'])
 
@@ -187,16 +208,15 @@ export function convertSelection(editor: Editor, block: BlockType): void {
   block.apply(editor.chain().focus().clearNodes()).run()
 }
 
-export function filterBlocks(query: string): BlockType[] {
+export function filterBlocks(editor: Editor, query: string): BlockType[] {
   const needle = query.trim().toLowerCase()
-  if (!needle) return BLOCK_TYPES
-  return BLOCK_TYPES.filter((block) =>
-    `${block.title} ${block.keywords}`.toLowerCase().includes(needle)
-  )
+  const blocks = blockTypesFor(editor)
+  if (!needle) return blocks
+  return blocks.filter((block) => `${block.title} ${block.keywords}`.toLowerCase().includes(needle))
 }
 
 export function activeBlockTitle(editor: Editor): string {
   // Lists and quotes wrap paragraphs, so check the wrapper before plain text.
-  const ordered = [...CONVERTIBLE_BLOCKS.slice(1), CONVERTIBLE_BLOCKS[0]]
-  return ordered.find((block) => block.isActive?.(editor))?.title ?? 'Text'
+  const [text, ...others] = convertibleBlocks(editor)
+  return [...others, text].find((block) => block.isActive?.(editor))?.title ?? text.title
 }

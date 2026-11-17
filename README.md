@@ -1,6 +1,6 @@
 # Notaboek
 
-A calm, block-style editor for plain `.md` and `.txt` files, on Windows and in the browser. Open a folder and your text files become clean, Notion-style pages. Nothing is imported: every page stays an ordinary file on your computer.
+A calm, block-style editor for plain text files, on Windows and in the browser: Markdown (including R Markdown and Quarto), `.txt`, `.csv` and `.tsv` tables, and TaskPaper to-do lists. Open a folder and your text files become clean, Notion-style pages. Nothing is imported: every page stays an ordinary file on your computer.
 
 ## Run it
 
@@ -15,7 +15,7 @@ npm run dev
 npm run dist
 ```
 
-The installer lands in `dist/`. It asks where new pages should go, with **Browse** opening a File Explorer folder picker. Installing lists Notaboek under "Open with" for `.md`, `.markdown` and `.txt` files without changing your default apps. To open them in Notaboek on a double-click, use **Open with > Choose another app > Always**, or choose Notaboek in **Settings > Apps > Default apps**. Windows may show its own app picker the first time you open a `.txt` file with anything other than its default app. The build isn't code-signed, so Windows SmartScreen will warn you the first time you run it.
+The installer lands in `dist/`. It asks where new pages should go, with **Browse** opening a File Explorer folder picker. Installing lists Notaboek under "Open with" for every kind of file it opens (see [Which files open](#which-files-open)) without changing your default apps. To open them in Notaboek on a double-click, use **Open with > Choose another app > Always**, or choose Notaboek in **Settings > Apps > Default apps**. Windows may show its own app picker the first time you open a `.txt` file with anything other than its default app. The build isn't code-signed, so Windows SmartScreen will warn you the first time you run it.
 
 ## What it does
 
@@ -96,6 +96,60 @@ A yellow highlight is written as `==text==`, the Markdown highlight that Obsidia
 
 Typed `==` that isn't meant as a highlight, such as `a == b`, is left alone, and is escaped as `\==` only where it would otherwise read as one.
 
+## Which files open
+
+| Kind | Extensions | Opens as |
+| --- | --- | --- |
+| Markdown | `.md`, `.markdown`, `.mdown`, `.mkd`, `.mkdn`, `.mdwn`, `.mdtext`, `.mdtxt` | A page with every block type |
+| R Markdown and Quarto | `.rmd`, `.qmd` | A Markdown page. Code chunks such as ```` ```{r, echo=FALSE} ```` keep their options when you edit the code |
+| Plain text | `.txt`, `.text` | Text with light structure (see below) |
+| Tables | `.csv`, `.tsv` | One table |
+| TaskPaper | `.taskpaper` | Projects, to-dos and notes |
+| PDF | `.pdf` | The document as it is, to highlight and circle (desktop only) |
+| Word | `.docx` | The document as it is, for small edits (desktop only) |
+
+Any page can be opened, searched, synced and linked to from another page. PDFs and Word documents open and can be linked to, but aren't searched or synced.
+
+## PDFs and Word documents
+
+A PDF opens page by page, with a toolbar above it.
+
+- **Highlight:** choose it, then drag across text. Dragging where there's no text, such as on a scanned page, highlights a box instead. With text already selected, clicking **Highlight** marks it straight away.
+- **Circle:** choose it, then drag around what you want circled. Hold `Shift` for a round circle.
+- Pick a colour from the swatches. Click a mark to select it, then press `Delete`, or pick a colour to change it. `Ctrl+Z` and `Ctrl+Y` undo and redo.
+- Marks are saved into the PDF as ordinary highlight and circle annotations, so Acrobat, Edge and other readers show them too. Notaboek only changes the marks it made: notes and annotations from other programs are left as they are.
+- A PDF that's signed or password-protected is shown but never changed.
+
+A Word document opens as its pages look in Word: fonts, sizes, colours, spacing, lists, tables and pictures.
+
+- Type to change text, in paragraphs and in table cells. `Enter` starts a new paragraph, continuing a list; on an empty list item it ends the list.
+- Make text bold, italic, underlined or struck through from the toolbar or with `Ctrl+B`, `Ctrl+I`, `Ctrl+U` and `Ctrl+Shift+S`, and pick a paragraph style such as Heading 1 from the list.
+- Pictures, fields such as a table of contents or page numbers, tracked changes, comments and content controls are shown and kept exactly as they are, but can't be edited. The toolbar says how many such parts a document has.
+- Only the paragraphs you change are rewritten. Everything else, including headers, footers, footnotes and settings, goes back into the file untouched.
+
+Both save as you go, like a page. Close the file in Word first: Word locks a document while it has it open.
+
+## How `.csv` and `.tsv` files work
+
+A `.csv` or `.tsv` file opens as one table, with its first row as the header. Edit cells, and use the **+** bars, the grips or the right-click menu to add and remove rows and columns. `Enter` in a cell starts a new line inside it, and `Tab` in the last cell adds a row.
+
+- **Rows you don't touch keep their exact text,** including their quotes, spacing and line endings. An edited row is written in the file's own style: the same delimiter and line endings, and quotes around every value if the file used them throughout. Otherwise a value is quoted only when it holds the delimiter, a quote or a line break.
+- **Semicolons are recognised.** Excel writes `;` between values where a comma is the decimal point, and Notaboek reads and writes those files that way, as well as Excel's `sep=;` first line.
+- **Short rows are shown padded** with empty cells so the table is a grid. The padding is only written if you edit that row, and then no wider than the row was, or the header if that can't be told.
+- **Empty rows added at the end aren't saved,** as with empty paragraphs. An empty file opens as a small empty table and stays empty until you type in it.
+- Values are plain text, so there's no bold, links or formulas, and a formula is shown as the text it is.
+- A file with more than 50,000 cells is too big to edit as a table, so it opens as plain text instead.
+
+## How `.taskpaper` files work
+
+A [TaskPaper](https://www.taskpaper.com/) file is read line by line. A line ending in a colon is a project, and shows as a heading. A line starting with `- ` is a task, and shows as a to-do. Anything else is a note. Tabs nest a line under the one above it, so a task's notes and subtasks sit inside it.
+
+- **Ticking a task tags it `@done(date)`** with today's date, as TaskPaper does, and unticking removes the tag. Editing a finished task keeps its original date.
+- **Other tags, such as `@today` or `@due(2026-12-01)`, stay in the text** and are shown in the accent colour.
+- **Typing `- ` starts a task.** The slash menu and **Turn into** offer only what TaskPaper can store: a note, a project and a task.
+- **New lines go under the project above them,** one tab deeper. A line you edit keeps the depth it had, and lines you don't touch keep their exact text.
+- A note that starts with `- ` or ends with a colon reads back as a task or a project, because that's what those mean in TaskPaper.
+
 ## How `.txt` files work
 
 A `.txt` file is read as text with light structure: `#` headings, `-` lists, `[ ]` to-dos, `>` quotes and `---` dividers all become blocks, and web addresses become links. Line breaks and indentation stay where you put them, and nothing is ever escaped.
@@ -108,17 +162,21 @@ Everything else stays exactly as written. `__init__.py`, `2*3*4` and `**stars**`
 - A page can only be open in one tab at a time.
 - Find in page covers the text of the page, not its frontmatter or raw HTML.
 - Search across files looks at the text as it's stored, so a phrase split by Markdown formatting, such as `some **bold** words`, is found by find in page but not by this search. It skips files over 8 MB and lists the first 200 pages.
-- Images can only be added on the desktop, and not to `.txt` pages or inside code blocks. They stay on that device, and moving a page doesn't bring its images along.
+- Images can only be added on the desktop, and not to `.txt`, `.csv`, `.tsv` or `.taskpaper` pages, or inside code blocks. They stay on that device, and moving a page doesn't bring its images along.
 - Files over 8 MB won't open as pages.
 - On pages over 256 KB, blocks out of view aren't drawn, so the scrollbar is an estimate. Spellcheck and the empty-line hints are off there.
 - A long `.txt` paragraph is shown in pieces of 200 lines, so copying across two pieces adds a blank line. The file itself is unaffected.
 - A file that's one enormous line, with no line breaks at all, stays slow, because a browser has to lay a line out whole.
 - Underline isn't offered, because Markdown has no way to store it.
+- Whether a `.csv` file uses commas or semicolons is worked out from its first 50 lines. A file with a single column, or one where every line could be read either way, can be guessed wrong. Rows you don't edit are saved exactly as they were either way.
+- A table page has no sticky header row, so the header scrolls away in a long table.
 - Theme colours are chosen from the presets; there's no custom colour picker yet.
 - In the web version, **Export to PDF** opens the browser's print dialog, where you choose **Save as PDF**.
 - Empty paragraphs aren't kept on save, because Markdown has no empty block.
 - A list can't mix to-do items with plain bullets. Such a list displays as a normal bulleted list with its `[ ]` shown as text.
 - Blocks are moved and duplicated with the mouse; the block handle has no keyboard route yet.
+- In a Word document, rows and columns can't be added or removed, and a selection that would delete a whole table is ignored. Headers, footers and footnotes aren't shown. Old `.doc` files and documents saved in Word's "Strict" format don't open.
+- Saving a PDF rewrites the whole file, so its revision history inside the file isn't kept. Find in page doesn't search PDFs yet.
 - Remote images in a Markdown file load when you open it, which tells that server you opened it. Images on network paths are never loaded.
 - Saving swaps in a new file, so a file's Hidden attribute, custom permissions and creation date aren't kept.
 

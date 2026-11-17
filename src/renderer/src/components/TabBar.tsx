@@ -1,6 +1,6 @@
-import { File, FileText, Plus, X } from 'lucide-react'
+import { FileText, Plus, X } from 'lucide-react'
 import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent, type MouseEvent } from 'react'
-import { baseName, stripExtension } from '../platform'
+import { baseName, pageIcon, stripExtension } from '../platform'
 import type { Tab } from '../tabs'
 import { Popover } from './Popover'
 
@@ -61,7 +61,7 @@ export function TabBar({ tabs, activeId, onSelect, onClose, onCloseOthers, onNew
     <div className="tabbar">
       <div ref={strip} className="tabbar-strip" role="tablist" aria-label="Open pages">
         {tabs.map((tab) => {
-          const Icon = tab.path && /\.txt$/i.test(tab.path) ? File : FileText
+          const Icon = tab.path ? pageIcon(tab.path) : FileText
           const title = titleOf(tab)
           return (
             <div
