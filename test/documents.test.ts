@@ -8,9 +8,10 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import { DOCUMENT_FILE, OPENABLE_FILE, PAGE_FILE, documentKindOf } from '../src/shared/fileTypes'
 import { isSafePath } from '../src/shared/sync/paths'
 import { ListCounter } from '../src/renderer/src/documents/docx/numbering'
-import { openDocx, saveDocx } from '../src/renderer/src/documents/docx/package'
+import { MAX_PARTS, openDocx, saveDocx } from '../src/renderer/src/documents/docx/package'
 import { readDocx } from '../src/renderer/src/documents/docx/read'
 import { docxExtensions } from '../src/renderer/src/documents/docx/schema'
+import { runCss, safeFontName } from '../src/renderer/src/documents/docx/styles'
 import { writeDocx } from '../src/renderer/src/documents/docx/write'
 import { openPdfMarkup, type PdfMark } from '../src/renderer/src/documents/pdfMarks'
 
@@ -235,6 +236,27 @@ describe('writing a Word document', () => {
 
   it('refuses a file that is not a Word document', () => {
     expect(() => openDocx(new Uint8Array([1, 2, 3, 4]))).toThrow(/isn't a Word document/)
+  })
+
+  it('refuses a small file that claims to unpack to too much', () => {
+    const zip = zipSync({ 'word/document.xml': strToU8('<x/>') })
+    // The central directory's record of the part's unpacked size.
+    const header = zip.findIndex((_, at) => zip[at] === 0x50 && zip[at + 1] === 0x4b && zip[at + 2] === 1 && zip[at + 3] === 2)
+    new DataView(zip.buffer, zip.byteOffset).setUint32(header + 24, 600 * 1024 * 1024, true)
+    expect(() => openDocx(zip)).toThrow(/512 MB/)
+
+    const many: Record<string, Uint8Array> = {}
+    for (let index = 0; index <= MAX_PARTS; index++) many[`part${index}.xml`] = new Uint8Array(0)
+    expect(() => openDocx(zipSync(many))).toThrow(/512 MB/)
+  })
+
+  it("keeps a document's font names from writing CSS of their own", () => {
+    const css = runCss({ font: 'Evil\n; background-image: url(https://example.com/track)', size: 12 })
+    expect(css).not.toMatch(/url\(|;\s*background/)
+    expect(css).toBe('font-family: "Evil background-image urlhttpsexample.comtrack", var(--docx-fallback-font); font-size: 12pt')
+    expect(safeFontName('ＭＳ 明朝')).toBe('ＭＳ 明朝')
+    expect(safeFontName('Segoe UI Semibold')).toBe('Segoe UI Semibold')
+    expect(runCss({ font: '";{}' })).toBe('')
   })
 })
 
