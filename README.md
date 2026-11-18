@@ -2,15 +2,19 @@
 
 [![CI](https://github.com/Sheldonmayhew/notaboek/actions/workflows/ci.yml/badge.svg)](https://github.com/Sheldonmayhew/notaboek/actions/workflows/ci.yml)
 [![Latest release](https://img.shields.io/github/v/release/Sheldonmayhew/notaboek)](https://github.com/Sheldonmayhew/notaboek/releases/latest)
-[![MIT licence](https://img.shields.io/github/license/Sheldonmayhew/notaboek)](LICENSE)
+[![MIT licence](https://img.shields.io/badge/licence-MIT-blue)](LICENSE)
 
 A calm, block-style editor for plain text files, on Windows and in the browser: Markdown (including R Markdown and Quarto), `.txt`, `.csv` and `.tsv` tables, and TaskPaper to-do lists. Open a folder and your text files become clean, Notion-style pages. Nothing is imported: every page stays an ordinary file on your computer.
+
+![Notaboek on Windows, with a folder of notes in the sidebar and a Markdown page called Cederberg trip open, showing its properties, a callout with a highlight, a to-do list and a table](.github/screenshots/app.png)
 
 ## Download
 
 Download the Windows installer from the [latest release](https://github.com/Sheldonmayhew/notaboek/releases/latest) and run it. Installing over an earlier version keeps your settings and pages. The installer isn't code-signed, so Windows SmartScreen will warn you the first time: choose **More info**, then **Run anyway**.
 
 Mac and Linux versions are coming soon. More at [notaboek.com](https://notaboek.com).
+
+[![The notaboek.com home page: "Beautiful to read. Yours to keep.", with a Download for Windows button and the app over a painted mountain landscape](.github/screenshots/website.jpg)](https://notaboek.com)
 
 ## Run from source
 
