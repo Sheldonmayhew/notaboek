@@ -21,6 +21,6 @@ The maintainer may edit, hide or delete comments, lock or close threads, and blo
 
 ## Reporting
 
-Use **Report content** in the **…** menu on the comment, issue or discussion. You can send the report to the maintainer, to GitHub, or both. Reports are kept private.
+Use **Report content** in the **…** menu on the comment, issue or discussion. The report goes privately to GitHub's staff. The maintainer moderates every thread too, and acts on anything that breaks this code whether or not it's reported.
 
 This code applies in this repository's issues, discussions and anywhere else someone speaks for the project.
