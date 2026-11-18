@@ -25,7 +25,7 @@
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.13",
     "@floating-ui/dom": "^1.8.0",
-    "@hono/node-server": "^2.1.5",
+    "@hono/node-server": "^2.1.9",
     "@tiptap/core": "^3.32.2",
     "@tiptap/extension-bubble-menu": "^3.32.2",
     "@tiptap/extension-code": "^3.32.2",
@@ -52,7 +52,7 @@
     "electron-vite": "^6.0.0",
     "esbuild": "^0.28.2",
     "fflate": "^0.8.3",
-    "hono": "^4.13.14",
+    "hono": "^4.13.19",
     "lowlight": "^3.3.0",
     "lucide-react": "^1.65.0",
     "markdown-it": "^15.0.3",
