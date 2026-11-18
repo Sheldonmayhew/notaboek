@@ -1,0 +1,59 @@
+name: Bug report
+description: Something in Notaboek doesn't work as it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Search the [open issues](https://github.com/Sheldonmayhew/notaboek/issues) first, in case it's already there. Ideas and questions go in [Discussions](https://github.com/Sheldonmayhew/notaboek/discussions). Security problems go in a [private report](https://github.com/Sheldonmayhew/notaboek/security/advisories/new), not here.
+  - type: input
+    id: version
+    attributes:
+      label: Notaboek version
+      description: It's in the installer's file name, and in Windows under Settings > Apps > Installed apps.
+      placeholder: "0.4.0"
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      placeholder: Windows 11 24H2
+    validations:
+      required: true
+  - type: dropdown
+    id: file-type
+    attributes:
+      label: Kind of file
+      options:
+        - Markdown (.md)
+        - Plain text (.txt)
+        - CSV or TSV
+        - TaskPaper
+        - PDF
+        - Word (.docx)
+        - Not about one kind of file
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to show it
+      placeholder: |
+        1. Open a folder with...
+        2. Type...
+        3. See...
+    validations:
+      required: true
+  - type: textarea
+    id: files
+    attributes:
+      label: Files or screenshots
+      description: If one file causes it, drag it here, with anything private taken out. Zip it first if GitHub won't take the file type.
