@@ -1,7 +1,7 @@
 {
   "name": "notaboek",
   "productName": "Notaboek",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "A calm, block-style editor for Markdown, text, CSV and TaskPaper files, with PDF markup and Word editing.",
   "license": "MIT",
   "main": "out/main/index.js",
